@@ -183,6 +183,9 @@ export default function DashboardPage() {
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
+  // Calculate total article count
+  const articleCount = updates.reduce((acc, u) => acc + (u.related_articles?.length || 0), 0);
+
   // --- FILTERING & SORTING LOGIC ---
   const filteredAndSortedUpdates = updates
     .filter(u =>
@@ -283,6 +286,7 @@ export default function DashboardPage() {
                 : '0%'
               }
             </p>
+            <p className="text-sm text-[var(--foreground)]/70">{articleCount} Total articles</p>
           </div>
         </div>
 
