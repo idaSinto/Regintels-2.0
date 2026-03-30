@@ -19,6 +19,7 @@ const Header = () => {
           <nav className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 gap-6 text-sm font-medium text-[var(--foreground)]/80">
             <a href="/" className="hover:text-[var(--accent)] transition-colors">Home</a>
             <a href="/dashboard" className="hover:text-[var(--accent)] transition-colors">Dashboard</a>
+            <a href="/login" className="hover:text-[var(--accent)] transition-colors">Staff Login</a>
           </nav>
 
           {/* Right Side / Mobile Placeholder */}

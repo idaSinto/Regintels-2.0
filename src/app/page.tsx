@@ -75,12 +75,12 @@ export default function Home() {
           {/* Primary CTA */}
           <div className="flex">
             <a
-              href="/dashboard"
+              href="/login"
               className="inline-flex items-center gap-3 px-8 py-4 rounded-xl font-semibold text-white
               bg-gradient-to-r from-blue-600 to-purple-600
               shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all"
             >
-              Open Intelligence Dashboard
+              Staff Sign In
               <ArrowRight className="h-5 w-5" />
             </a>
           </div>

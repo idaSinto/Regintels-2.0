@@ -5,6 +5,8 @@ import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, 
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import LogoutButton from '@/components/auth/LogoutButton';
+
 // ==========================================
 // 1. TYPES & INTERFACES
 // ==========================================
@@ -27,6 +29,16 @@ type VerifiedUpdate = {
   deduced_published_date: string | null;
   created_at: string;
 };
+
+async function parseJsonResponse<T>(response: Response): Promise<T | null> {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.includes('application/json')) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
 
 // ==========================================
 // 2. HELPER / UTILITY FUNCTIONS
@@ -150,7 +162,12 @@ export default function DashboardPage() {
     }
     try {
       const res = await fetch('/api/latest-verified-updates');
-      const data = await res.json();
+      const data = await parseJsonResponse<VerifiedUpdate[]>(res);
+
+      if (!res.ok || !data) {
+        throw new Error('Latest updates API did not return valid JSON.');
+      }
+
       setUpdates(data);
     } catch (err) {
       console.error('Fetch latest updates error', err);
@@ -167,7 +184,12 @@ export default function DashboardPage() {
     setPipelineRunning(true);
     try {
       const res = await fetch('/api/run-pipeline');
-      await res.json();
+      const payload = await parseJsonResponse<Record<string, unknown>>(res);
+
+      if (!res.ok || !payload) {
+        throw new Error('Pipeline API did not return valid JSON.');
+      }
+
       await fetchUpdates(); // Refresh list after scan finish
     } catch (err) {
       console.error('Pipeline error', err);
@@ -224,6 +246,9 @@ export default function DashboardPage() {
         
         {/* HEADER */}
         <section className="w-full text-center px-4 mb-8">
+          <div className="mb-6 flex justify-end">
+            <LogoutButton />
+          </div>
           <div className="inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)] mb-6">
             <span className="flex h-2 w-2 rounded-full bg-[var(--accent)] mr-2"></span>
             Live Monitoring
@@ -259,6 +284,13 @@ export default function DashboardPage() {
             >
               <Filter className="h-5 w-5" />
               Edit Regulations
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/staff-users')}
+              className="inline-flex items-center justify-center gap-2 bg-slate-800 text-white px-6 py-3.5 rounded-xl text-base font-semibold hover:opacity-90 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-slate-800/20"
+            >
+              Staff Users
             </button>
           </div>
         </section>
@@ -306,6 +338,8 @@ export default function DashboardPage() {
             
             <div className="flex gap-2">
               <select
+                aria-label="Sort updates by"
+                title="Sort updates by"
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value as 'date' | 'name')}
                 className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -315,6 +349,8 @@ export default function DashboardPage() {
               </select>
 
               <select
+                aria-label="Sort order"
+                title="Sort order"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
                 className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
