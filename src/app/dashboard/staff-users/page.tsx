@@ -13,8 +13,9 @@ import {
   Trash2,
   UserRound,
   X,
+  AlertTriangle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
 type StaffAccount = {
@@ -49,6 +50,46 @@ export default function StaffUsersPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [rowActionUserId, setRowActionUserId] = useState<number | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<StaffAccount | null>(null);
+
+  function confirmDelete(user: StaffAccount) {
+    setUserToDelete(user);
+    setIsDeleteModalOpen(true);
+  }
+
+  async function handlePermanentDelete() {
+    if (!userToDelete) return;
+
+    const targetUser = userToDelete;
+    setIsDeleteModalOpen(false);
+    setUserToDelete(null);
+    setError(null);
+    setSuccess(null);
+    setRowActionUserId(targetUser.id);
+
+    try {
+      const response = await fetch(`/api/staff-users/${targetUser.id}`, {
+        method: 'DELETE',
+      });
+
+      const payload = await parseJsonResponse<{ ok?: boolean; error?: string }>(response);
+
+      if (!response.ok) {
+        setError(payload?.error ?? 'Failed to delete staff user.');
+        return;
+      }
+
+      setSuccess(`Deleted ${targetUser.staffId} successfully.`);
+      if (editingUserId === targetUser.id) cancelEditing();
+      await fetchStaffUsers();
+    } catch {
+      setError('Failed to delete staff user.');
+    } finally {
+      setRowActionUserId(null);
+    }
+  }
+    
 
   async function fetchStaffUsers() {
     setLoading(true);
@@ -223,42 +264,54 @@ export default function StaffUsersPage() {
     }
   }
 
-  async function handleDeleteStaffUser(user: StaffAccount) {
-    if (!window.confirm(`Delete ${user.staffId}? This also removes the Supabase auth user.`)) {
-      return;
-    }
-
-    setError(null);
-    setSuccess(null);
-    setRowActionUserId(user.id);
-
-    try {
-      const response = await fetch(`/api/staff-users/${user.id}`, {
-        method: 'DELETE',
-      });
-
-      const payload = await parseJsonResponse<{ ok?: boolean; error?: string }>(response);
-
-      if (!response.ok) {
-        setError(payload?.error ?? 'Failed to delete staff user.');
-        return;
-      }
-
-      setSuccess(`Deleted ${user.staffId} successfully.`);
-      if (editingUserId === user.id) {
-        cancelEditing();
-      }
-      await fetchStaffUsers();
-    } catch {
-      setError('Failed to delete staff user.');
-    } finally {
-      setRowActionUserId(null);
-    }
-  }
 
   return (
     <div className="flex min-h-[calc(100vh-theme(spacing.32))] w-full flex-col items-center justify-center bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] px-4 py-8">
-      <div className="absolute left-1/2 top-0 -z-10 h-full w-full -translate-x-1/2 bg-gradient-to-b from-[var(--secondary)] to-transparent" />
+      
+      <AnimatePresence>
+        {isDeleteModalOpen && userToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/20 bg-white p-8 shadow-2xl dark:bg-gray-900"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/30">
+                  <AlertTriangle className="h-8 w-8" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">Delete Staff User?</h3>
+                <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+                  Are you sure you want to delete <span className="font-bold text-slate-900 dark:text-white">{userToDelete.staffId}</span>? 
+                  This action is permanent and will also remove the associated Supabase auth account.
+                </p>
+                <div className="flex w-full gap-3">
+                  <button
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePermanentDelete}
+                    className="flex-1 rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 shadow-lg shadow-rose-600/20"
+                  >
+                    Yes, Delete
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="container mx-auto">
         <section className="mb-8 w-full px-4">
@@ -403,12 +456,16 @@ export default function StaffUsersPage() {
                         <input
                           type="text"
                           value={editStaffId}
+                          aria-label="Edit staff ID"
+                          placeholder="Staff ID"
                           onChange={event => setEditStaffId(event.target.value)}
                           className="rounded-lg border border-gray-300 bg-white/70 px-3 py-2 text-sm outline-none dark:border-gray-600 dark:bg-gray-800/60"
                         />
                         <input
                           type="email"
                           value={editEmail}
+                          aria-label="Edit email"
+                          placeholder="Email"
                           onChange={event => setEditEmail(event.target.value)}
                           className="rounded-lg border border-gray-300 bg-white/70 px-3 py-2 text-sm outline-none dark:border-gray-600 dark:bg-gray-800/60"
                         />
@@ -470,7 +527,7 @@ export default function StaffUsersPage() {
                             {user.isActive ? 'Inactivate' : 'Activate'}
                           </button>
                           <button
-                            onClick={() => handleDeleteStaffUser(user)}
+                            onClick={() => confirmDelete(user)}
                             disabled={rowActionUserId === user.id}
                             className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-500 disabled:opacity-70"
                           >
