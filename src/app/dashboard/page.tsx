@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -28,6 +28,10 @@ type VerifiedUpdate = {
   related_articles: Article[];
   deduced_published_date: string | null;
   created_at: string;
+};
+
+type ApiErrorResponse = {
+  error?: string;
 };
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
@@ -154,7 +158,7 @@ export default function DashboardPage() {
   /**
    * Loads data from the database
    */
-  const fetchUpdates = async (showRefresh = false) => {
+  const fetchUpdates = useCallback(async (showRefresh = false) => {
     if (showRefresh) {
       setRefreshing(true);
     } else {
@@ -162,20 +166,34 @@ export default function DashboardPage() {
     }
     try {
       const res = await fetch('/api/latest-verified-updates');
-      const data = await parseJsonResponse<VerifiedUpdate[]>(res);
+      const payload = await parseJsonResponse<VerifiedUpdate[] | ApiErrorResponse>(res);
 
-      if (!res.ok || !data) {
-        throw new Error('Latest updates API did not return valid JSON.');
+      if (res.status === 401) {
+        router.replace('/');
+        router.refresh();
+        return;
       }
 
-      setUpdates(data);
+      if (!res.ok) {
+        const message =
+          payload && !Array.isArray(payload) ? payload.error : 'Failed to load latest updates.';
+        console.error('Fetch latest updates error', message);
+        return;
+      }
+
+      if (!payload || !Array.isArray(payload)) {
+        console.error('Fetch latest updates error', 'Latest updates API did not return valid JSON.');
+        return;
+      }
+
+      setUpdates(payload);
     } catch (err) {
       console.error('Fetch latest updates error', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [router]);
 
   /**
    * Starts the background scanning process
@@ -184,9 +202,23 @@ export default function DashboardPage() {
     setPipelineRunning(true);
     try {
       const res = await fetch('/api/run-pipeline');
-      const payload = await parseJsonResponse<Record<string, unknown>>(res);
+      const payload = await parseJsonResponse<Record<string, unknown> | ApiErrorResponse>(res);
 
-      if (!res.ok || !payload) {
+      if (res.status === 401) {
+        router.replace('/');
+        router.refresh();
+        return;
+      }
+
+      if (!res.ok) {
+        const message =
+          payload && !Array.isArray(payload) && 'error' in payload
+            ? payload.error
+            : 'Pipeline API request failed.';
+        throw new Error(typeof message === 'string' ? message : 'Pipeline API request failed.');
+      }
+
+      if (!payload) {
         throw new Error('Pipeline API did not return valid JSON.');
       }
 
@@ -201,7 +233,7 @@ export default function DashboardPage() {
   // Run on initial page load
   useEffect(() => {
     fetchUpdates();
-  }, []);
+  }, [fetchUpdates]);
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -288,9 +320,9 @@ export default function DashboardPage() {
 
             <button
               onClick={() => router.push('/dashboard/staff-users')}
-              className="inline-flex items-center justify-center gap-2 bg-slate-800 text-white px-6 py-3.5 rounded-xl text-base font-semibold hover:opacity-90 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-slate-800/20"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-violet-600/20 transition-all hover:bg-violet-500 hover:scale-105 active:scale-95"
             >
-              Staff Users
+              Profile Settings
             </button>
           </div>
         </section>
@@ -301,11 +333,17 @@ export default function DashboardPage() {
             <p className="text-sm text-[var(--foreground)]/70">Total Updates</p>
             <p className="text-3xl font-bold text-[var(--foreground)] mt-2">{updates.length}</p>
           </div>
-          <div 
-            onClick={() => router.push('/dashboard/impact-settings')}
-            className="cursor-pointer bg-white/60 dark:bg-gray-800/60 rounded-xl p-6 shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all"
-          >
-            <p className="text-sm text-[var(--foreground)]/70">High Impact</p>
+          <div className="bg-white/60 dark:bg-gray-800/60 rounded-xl p-6 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-sm text-[var(--foreground)]/70">High Impact</p>
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/impact-settings')}
+                className="inline-flex items-center justify-center rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/25 hover:text-amber-200"
+              >
+                Open Settings
+              </button>
+            </div>
             <p className="text-3xl font-bold text-rose-500 mt-2">
               {updates.filter(u => u.impact_level === 'high').length}
             </p>

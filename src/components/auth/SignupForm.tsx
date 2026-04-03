@@ -1,22 +1,28 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, Building2, Eye, EyeOff, KeyRound, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-type LoginFormProps = {
+type SignupFormProps = {
   nextPath: string;
   embedded?: boolean;
 };
 
-export default function LoginForm({ nextPath, embedded = false }: LoginFormProps) {
+type ApiError = {
+  error?: string;
+};
+
+export default function SignupForm({ nextPath, embedded = false }: SignupFormProps) {
   const router = useRouter();
   const [staffId, setStaffId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     router.prefetch(nextPath);
@@ -25,36 +31,46 @@ export default function LoginForm({ nextPath, embedded = false }: LoginFormProps
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setLoading(true);
 
     const normalizedStaffId = staffId.trim();
-    if (!normalizedStaffId || !password) {
-      setError('Staff ID and password are required.');
-      setLoading(false);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedStaffId || !normalizedEmail || !password) {
+      setError('Staff ID, email, and password are required.');
       return;
     }
 
+    if (password !== confirmPassword) {
+      setError('Password confirmation does not match.');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const response = await fetch('/api/auth/staff-login', {
+      const signupResponse = await fetch('/api/auth/staff-signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           staffId: normalizedStaffId,
+          email: normalizedEmail,
           password,
+          confirmPassword,
         }),
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(payload?.error ?? 'Invalid staff ID or password.');
+      if (!signupResponse.ok) {
+        const payload = (await signupResponse.json().catch(() => null)) as ApiError | null;
+        setError(payload?.error ?? 'Failed to create account.');
         return;
       }
 
-      router.replace(nextPath);
+      router.replace('/dashboard');
+      router.refresh();
     } catch {
-      setError('Unable to sign in right now. Please try again.');
+      setError('Unable to sign up right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -68,14 +84,14 @@ export default function LoginForm({ nextPath, embedded = false }: LoginFormProps
           Regintels Access
         </div>
         <h1 className={embedded ? 'text-2xl font-bold tracking-tight text-white' : 'text-3xl font-bold tracking-tight text-white'}>
-          Sign in to Regintels
+          Create your Regintels account
         </h1>
         <p className={embedded ? 'mt-2 text-sm leading-7 text-slate-300' : 'mt-3 text-sm leading-6 text-slate-300'}>
-          Sign in using your registered account.
+          Use the same staff credentials pattern as sign in. 
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className={embedded ? 'space-y-4' : 'space-y-5'}>
+      <form onSubmit={handleSubmit} className={embedded ? 'space-y-3.5' : 'space-y-5'}>
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-200">Staff ID</span>
           <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 focus-within:border-violet-400 focus-within:bg-slate-900">
@@ -92,15 +108,30 @@ export default function LoginForm({ nextPath, embedded = false }: LoginFormProps
         </label>
 
         <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-200">Email</span>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 focus-within:border-violet-400 focus-within:bg-slate-900">
+            <Mail className="h-4 w-4 text-slate-400" />
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              placeholder="staff@regintels.com"
+              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+            />
+          </div>
+        </label>
+
+        <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-200">Password</span>
           <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 focus-within:border-violet-400 focus-within:bg-slate-900">
             <KeyRound className="h-4 w-4 text-slate-400" />
             <input
               type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={password}
               onChange={event => setPassword(event.target.value)}
-              placeholder="Enter your password"
+              placeholder="Create a password"
               className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
             />
             <button
@@ -110,6 +141,29 @@ export default function LoginForm({ nextPath, embedded = false }: LoginFormProps
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-200">Confirm Password</span>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 focus-within:border-violet-400 focus-within:bg-slate-900">
+            <KeyRound className="h-4 w-4 text-slate-400" />
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={event => setConfirmPassword(event.target.value)}
+              placeholder="Re-enter your password"
+              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(value => !value)}
+              className="text-slate-400 transition hover:text-violet-200"
+              aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
         </label>
@@ -127,26 +181,10 @@ export default function LoginForm({ nextPath, embedded = false }: LoginFormProps
             embedded ? 'py-3' : 'py-3.5'
           }`}
         >
-          {loading ? 'Signing in...' : 'Sign In'}
+          {loading ? 'Creating account...' : 'Sign Up'}
           <ArrowRight className="h-4 w-4" />
         </button>
       </form>
-
-      {!embedded ? (
-        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-xs leading-5 text-slate-300">
-          <div className="flex items-center gap-2 font-medium text-white">
-            <Building2 className="h-4 w-4 text-violet-300" />
-            Staff directory lookup
-          </div>
-          <p className="mt-2">
-            The app now looks up the staff email from your staff table and does not derive email from
-            the staff ID.
-          </p>
-          <Link href="/signup" className="mt-3 inline-flex text-sm font-medium text-violet-300 hover:text-violet-200">
-            Need a new account? Sign up
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }
