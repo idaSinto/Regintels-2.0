@@ -75,7 +75,7 @@ export async function GET(req: Request) {
         const res = await runRegulationPipeline({
           config,
           synthesisPromptBuilder: buildSynthesisPrompt,
-          maxSearchPerQuery: 5,
+          maxSearchPerQuery: 10,
         });
         results.push({ regulation: reg.name, result: res });
 

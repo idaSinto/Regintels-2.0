@@ -20,7 +20,7 @@ export async function fetchUpdates(): Promise<Article[]> {
     id: item.id,
     title: item.deduced_title,
     summary_text: item.summary_text,
-    link: item.primary_source_url || '#',
+    link: item.primary_source_url || '#', 
     regulation: item.regulation,
   }));
 }

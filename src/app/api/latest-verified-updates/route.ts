@@ -8,6 +8,7 @@ type Article = {
   id: number;
   url: string;
   title: string;
+  published_at?: string | null;
 };
 
 type LatestVerifiedRow = {
@@ -54,9 +55,9 @@ export async function GET() {
 
   // Fetch article titles/URLs for all collected IDs
   const { data: articlesData, error: articlesError } = allRelatedIds.length > 0
-    ? await supabase
+      ? await supabase
         .from('raw_articles')
-        .select('id, url, title')
+        .select('id, url, title, published_at')
         .in('id', allRelatedIds)
     : { data: [] as Article[], error: null };
 
@@ -74,8 +75,12 @@ export async function GET() {
   const updates = (data ?? []).map((row: LatestVerifiedRow) => {
     const related_articles: Article[] = (row.related_article_ids ?? [])
       .map((id) => articlesMap.get(id))
-      .filter((a): a is Article => Boolean(a)) // Remove any undefined lookups
-      .sort((a, b) => a.id - b.id);
+      .filter((a): a is Article => Boolean(a))
+      .sort((a, b) => {
+        const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
+        const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
+        return dateB - dateA;
+      });
 
     return {
       id: row.id,
