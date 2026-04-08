@@ -5,8 +5,6 @@ import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, 
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import LogoutButton from '@/components/auth/LogoutButton';
-
 // ==========================================
 // 1. TYPES & INTERFACES
 // ==========================================
@@ -269,19 +267,12 @@ export default function DashboardPage() {
     });
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.32))] w-full bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] px-4 py-8">
-      
-      {/* Background gradient hint */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-gradient-to-b from-[var(--secondary)] to-transparent -z-10" />
-
-      <div className="container mx-auto">
+    <div className="w-full">
+      <div className="mx-auto max-w-7xl">
         
         {/* HEADER */}
-        <section className="w-full text-center px-4 mb-8">
-          <div className="mb-6 flex justify-end">
-            <LogoutButton />
-          </div>
-          <div className="inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)] mb-6">
+        <section className="mb-8 w-full px-1 text-center sm:px-2">
+          <div className="mb-6 inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
             <span className="flex h-2 w-2 rounded-full bg-[var(--accent)] mr-2"></span>
             Live Monitoring
           </div>

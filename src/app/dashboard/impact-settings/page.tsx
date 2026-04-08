@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ArrowLeft, AlertCircle, Zap, CheckCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Plus, Trash2, AlertCircle, Zap, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type ImpactKeyword = {
@@ -42,8 +41,6 @@ export default function ImpactSettingsPage() {
   const [newLevel, setNewLevel] = useState<"high" | "medium" | "low">("high");
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const router = useRouter();
-
   // Fetch keywords from API
   const fetchKeywords = async () => {
     setLoading(true);
@@ -87,33 +84,18 @@ export default function ImpactSettingsPage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.32))] w-full bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] px-4 py-8">
-      
-      {/* Background gradient hint */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-gradient-to-b from-[var(--secondary)] to-transparent -z-10" />
-
-      <div className="container mx-auto max-w-4xl">
+    <div className="w-full">
+      <div className="mx-auto max-w-5xl">
         
         {/* HEADER */}
-        <section className="w-full text-center px-4 mb-8">
-          <div className="inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)] mb-6">
+        <section className="mb-8 w-full px-1 text-center sm:px-2">
+          <div className="mb-6 inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
             <span className="flex h-2 w-2 rounded-full bg-[var(--accent)] mr-2"></span>
             Impact Configuration
           </div>
-          <div className="flex items-center justify-between mb-6">
-            <motion.button
-              whileHover={{ x: -4 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-[var(--foreground)]/70 hover:text-[var(--foreground)] px-4 py-2 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all"
-            >
-              <ArrowLeft className="w-5 h-5" /> Back
-            </motion.button>
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--foreground)]">
-              Impact Keywords
-            </h1>
-            <div className="w-6" /> {/* placeholder for spacing */}
-          </div>
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--foreground)]">
+            Impact Keywords
+          </h1>
           <p className="mx-auto max-w-2xl text-lg text-[var(--foreground)]/80 mb-10">
             Configure keywords that determine impact level of regulatory updates
           </p>
@@ -150,6 +132,7 @@ export default function ImpactSettingsPage() {
               onChange={(e) => setNewKeyword(e.target.value)}
             />
             <select
+              aria-label="Select impact level for new keyword"
               className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 px-4 py-3 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
               value={newLevel}
               onChange={(e) => setNewLevel(e.target.value as any)}
@@ -221,6 +204,7 @@ export default function ImpactSettingsPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <select
+                          aria-label={`Select impact level for keyword: ${k.keyword}`}
                           className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 px-3 py-2 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                           value={k.level}
                           onChange={(e) => updateLevel(k.id, e.target.value as any)}

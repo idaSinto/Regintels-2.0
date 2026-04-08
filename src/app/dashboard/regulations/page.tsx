@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Plus, Trash2, Edit2, Globe, Calendar, Search, ArrowLeft } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Globe, Calendar, Search } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 
 // ==========================================
 // TYPES
@@ -150,7 +149,6 @@ const cardVariants: Variants = {
 // MAIN PAGE
 // ==========================================
 export default function RegulationsPage() {
-  const router = useRouter();
   const [regs, setRegs] = useState<Regulation[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -187,29 +185,14 @@ export default function RegulationsPage() {
     );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.32))] w-full bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] px-4 py-8">
-      
-      {/* Background gradient hint */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-gradient-to-b from-[var(--secondary)] to-transparent -z-10" />
-
-      <div className="container mx-auto">
+    <div className="w-full">
+      <div className="mx-auto max-w-7xl">
         
         {/* HEADER */}
-        <section className="w-full text-center px-4 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <motion.button
-              whileHover={{ x: -4 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 text-[var(--foreground)]/70 hover:text-[var(--foreground)] px-4 py-2 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all"
-            >
-              <ArrowLeft className="h-5 w-5" /> Back to Dashboard
-            </motion.button>
-            <div className="inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
-              <span className="flex h-2 w-2 rounded-full bg-[var(--accent)] mr-2"></span>
-              Configuration Manager
-            </div>
-            <div className="w-6" />
+        <section className="mb-8 w-full px-1 text-center sm:px-2">
+          <div className="mb-6 inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
+            <span className="flex h-2 w-2 rounded-full bg-[var(--accent)] mr-2"></span>
+            Configuration Manager
           </div>
           <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-[var(--foreground)] sm:text-7xl mb-6">
             Regulations

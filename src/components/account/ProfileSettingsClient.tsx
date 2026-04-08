@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, KeyRound, Mail, ShieldCheck, Trash2, UserRound, AlertTriangle, Eye, EyeOff } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Check, KeyRound, Mail, ShieldCheck, Trash2, UserRound, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 import { createSupabaseBrowserClient } from '@/lib/core/supabaseBrowser';
 import type { StaffAccountRecord } from '@/lib/core/supabaseAdmin';
@@ -44,7 +43,6 @@ type ProfileSettingsClientProps = {
 };
 
 export default function ProfileSettingsClient({ initialAccount }: ProfileSettingsClientProps) {
-  const router = useRouter();
   const [account, setAccount] = useState<StaffAccountRecord>(initialAccount);
   const [staffId, setStaffId] = useState(initialAccount.staffId);
   const [email, setEmail] = useState(initialAccount.email);
@@ -92,8 +90,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
       const payload = await parseJsonResponse<StaffAccountRecord | ApiResponse>(response);
 
       if (response.status === 401) {
-        router.replace('/');
-        router.refresh();
+        window.location.href = '/';
         return;
       }
 
@@ -138,8 +135,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
       const payload = await parseJsonResponse<ApiResponse>(response);
 
       if (response.status === 401) {
-        router.replace('/');
-        router.refresh();
+        window.location.href = '/';
         return;
       }
 
@@ -150,8 +146,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
 
       const supabase = createSupabaseBrowserClient();
       await supabase.auth.signOut();
-      router.replace('/');
-      router.refresh();
+      window.location.href = '/';
     } catch {
       setError('Failed to delete account.');
     } finally {
@@ -161,7 +156,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] px-4 py-8">
+    <div className="w-full">
       <AnimatePresence>
         {isDeleteModalOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -207,22 +202,11 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
         ) : null}
       </AnimatePresence>
 
-      <div className="container mx-auto flex-1">
-        <section className="mb-8 w-full px-4">
-          <div className="mb-6 flex items-center justify-between">
-            <motion.button
-              whileHover={{ x: -4 }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-[var(--foreground)]/70 transition-all hover:bg-white/50 hover:text-[var(--foreground)] dark:hover:bg-gray-800/50"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              Back to Dashboard
-            </motion.button>
-            <div className="inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
-              <span className="mr-2 flex h-2 w-2 rounded-full bg-[var(--accent)]" />
-              Profile Settings
-            </div>
+      <div className="mx-auto max-w-6xl flex-1">
+        <section className="mb-8 w-full px-1 sm:px-2">
+          <div className="mb-6 inline-flex items-center rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-sm font-medium text-[var(--accent)]">
+            <span className="mr-2 flex h-2 w-2 rounded-full bg-[var(--accent)]" />
+            Profile Settings
           </div>
 
           <h1 className="text-5xl font-bold tracking-tight text-[var(--foreground)] sm:text-6xl">
@@ -234,7 +218,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
         </section>
 
         {(error || success) ? (
-          <section className="mb-6 px-4">
+          <section className="mb-6 px-1 sm:px-2">
             {error ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700 shadow-sm">
                 {error}
@@ -248,7 +232,7 @@ export default function ProfileSettingsClient({ initialAccount }: ProfileSetting
           </section>
         ) : null}
 
-        <section className="mx-4 rounded-2xl border border-gray-200/50 bg-white/60 p-6 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/60">
+        <section className="mx-1 rounded-2xl border border-gray-200/50 bg-white/60 p-6 shadow-sm sm:mx-2 dark:border-gray-700/50 dark:bg-gray-800/60">
           <div className="mb-6 flex items-center gap-3">
             <div className="rounded-xl bg-[var(--accent)]/10 p-3">
               <ShieldCheck className="h-5 w-5 text-[var(--accent)]" />
