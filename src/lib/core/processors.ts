@@ -47,7 +47,7 @@ Output EXACT JSON ONLY:
   "update_type": "addition | revision | announcement | guidance",
   "event_month": "YYYY-MM | unspecified",
   "change_scope": "count_1 | count_2 | count_3+ | process | timeline | unspecified",
-  "update_summary": "Starts with 'On Month Year, ...' describing the change concisely"
+  "update_summary": "Starts with 'On Month Year. ...' describing the change concisely"
 }
 `;
 };

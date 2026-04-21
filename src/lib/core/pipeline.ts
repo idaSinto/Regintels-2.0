@@ -56,6 +56,15 @@ type ExistingLatestUpdate = {
   related_article_ids: number[] | null;
 };
 
+type ExistingRawArticle = {
+  id: number;
+  published_at: string | null;
+  title: string | null;
+  snippet: string | null;
+  content: string | null;
+  is_processed: boolean | null;
+};
+
 // ---------------------------------------------------------
 // Scan and store articles
 // ---------------------------------------------------------
@@ -88,12 +97,21 @@ export async function scanAndStoreArticles(
           if (htmlMatch) publishedDate = htmlMatch[1];
         }
 
-        // Step 2: Fallback to parsing text for dates
-        if (!publishedDate && r.content) {
-          const parsed = chrono.parse(r.content);
+        // Step 2: Fallback to parsing title/snippet text for dates (less noisy than full content)
+        if (!publishedDate) {
+          const dateProbeText = [r.title, r.snippet].filter(Boolean).join(' ');
+          const parsed = chrono.parse(dateProbeText);
           if (parsed.length > 0) {
             publishedDate = parsed[0].date().toISOString();
           }
+        }
+
+        // Final check datetime is valid
+        if (!publishedDate && r.content) {
+          const htmlMatch = r.content.match(
+            /<time[^>]*datetime=["']([^"']+)["'][^>]*>/i
+          );
+          if (htmlMatch) publishedDate = htmlMatch[1];
         }
 
         // Step 3: Only keep articles from the last year
@@ -114,8 +132,8 @@ export async function scanAndStoreArticles(
   aggregatedResults.sort((a, b) => {
     const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
     const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
-  return dateB - dateA; // newest first
-});
+    return dateB - dateA; // newest first
+  });
 
 
   // Insert deduped articles into database
@@ -124,11 +142,13 @@ export async function scanAndStoreArticles(
     try {
       const { data: existing } = await supabase
         .from('raw_articles')
-        .select('id')
+        .select('id, published_at, title, snippet, content, is_processed')
         .eq('url', art.url)
         .limit(1);
 
-      if (!existing || existing.length === 0) {
+      const existingRow = (existing?.[0] ?? null) as ExistingRawArticle | null;
+
+      if (!existingRow) {
         const { data, error } = await supabase
           .from('raw_articles')
           .insert({
@@ -149,13 +169,37 @@ export async function scanAndStoreArticles(
           insertedIds.push(data.id);
           console.log('Inserted raw article ID:', data.id);
         }
+        continue;
+      }
+
+      // Re-process same URL if the authority updated publish date/content/title/snippet.
+      if (shouldReprocessExistingRawArticle(existingRow, art)) {
+        const { error: updateExistingError } = await supabase
+          .from('raw_articles')
+          .update({
+            title: art.title ?? existingRow.title,
+            snippet: art.snippet ?? existingRow.snippet,
+            content: art.content ?? existingRow.content,
+            source: art.source ?? art.domain ?? null,
+            published_at: art.published_at ?? existingRow.published_at,
+            is_processed: false
+          })
+          .eq('id', existingRow.id);
+
+        if (updateExistingError) {
+          console.error('Update existing raw article error:', updateExistingError);
+          continue;
+        }
+
+        insertedIds.push(existingRow.id);
+        console.log('Queued updated raw article ID:', existingRow.id);
       }
     } catch (err) {
       console.error('Insert article exception', art.url, err);
     }
   }
 
-  return insertedIds;
+  return Array.from(new Set(insertedIds));
 }
 
 // ---------------------------------------------------------
@@ -192,7 +236,8 @@ export async function synthesizeArticles(
       }
 
       parsed.article_id = article.id ?? null;
-      parsed.article_published_date = parsed.article_published_date ?? article.published_at ?? null;
+      // Prefer source article published date over model-inferred date.
+      parsed.article_published_date = article.published_at ?? parsed.article_published_date ?? null;
       results.push(parsed);
 
     } catch (err) {
@@ -272,9 +317,72 @@ function normalizeSummaryForFingerprint(summary: string): string {
     .trim();
 }
 
+function normalizeComparableText(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function shouldReprocessExistingRawArticle(existing: ExistingRawArticle, incoming: TavilyArticle): boolean {
+  const incomingPublished = incoming.published_at ? dayjs(incoming.published_at) : null;
+  const existingPublished = existing.published_at ? dayjs(existing.published_at) : null;
+
+  const incomingIsNewer = Boolean(
+    incomingPublished?.isValid() &&
+      (!existingPublished?.isValid() || incomingPublished.isAfter(existingPublished))
+  );
+
+  const titleChanged = normalizeComparableText(existing.title) !== normalizeComparableText(incoming.title ?? null);
+  const snippetChanged = normalizeComparableText(existing.snippet) !== normalizeComparableText(incoming.snippet ?? null);
+  const contentChanged = normalizeComparableText(existing.content) !== normalizeComparableText(incoming.content ?? null);
+
+  return incomingIsNewer || titleChanged || snippetChanged || contentChanged;
+}
+
 function buildClusterSuffixFromSummary(summary: string): string {
   const normalized = normalizeSummaryForFingerprint(summary) || 'unspecified';
   return createHash('sha1').update(normalized).digest('hex').slice(0, 12);
+}
+
+function summariesLikelySameUpdate(a: string, b: string): boolean {
+  const normalizedA = normalizeSummaryForFingerprint(a);
+  const normalizedB = normalizeSummaryForFingerprint(b);
+
+  if (!normalizedA || !normalizedB) return false;
+  return normalizedA === normalizedB;
+}
+
+function parseCandidateDate(candidate: CandidateUpdate): dayjs.Dayjs | null {
+  const candidates = [
+    candidate.article_published_date,
+    candidate.event_month && candidate.event_month !== 'unspecified'
+      ? `${candidate.event_month}-01`
+      : null
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const parsed = dayjs(value);
+    if (parsed.isValid()) return parsed;
+  }
+
+  return null;
+}
+
+function parseMaybeDate(value: string | null | undefined): dayjs.Dayjs | null {
+  if (!value) return null;
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed : null;
+}
+
+function isTemporallyCompatible(
+  leftDate: dayjs.Dayjs | null,
+  rightDate: dayjs.Dayjs | null,
+  maxMonthGap = 18
+): boolean {
+  if (!leftDate || !rightDate) return true;
+  return Math.abs(leftDate.diff(rightDate, 'month')) <= maxMonthGap;
 }
 
 function inferFallbackUpdateType(text: string): 'addition' | 'revision' | 'announcement' | 'guidance' {
@@ -302,6 +410,8 @@ function inferFallbackChangeScope(text: string): string {
   }
 
   return 'unspecified';
+
+  // 
 }
 
 function buildFallbackCandidate(article: TavilyArticle): CandidateUpdate {
@@ -385,7 +495,8 @@ async function getLatestCandidatesByUpdateType(regulationId: string, updateType:
     `)
     .eq('regulation', regulationId)
     .eq('is_latest', true)
-    .like('anchor', `${regulationId}::${updateType}::%`);
+    .like('anchor', `${regulationId}::${updateType}::%`)
+    .order('deduced_published_date', { ascending: false, nullsFirst: false });
 
   return (data ?? []) as ExistingLatestUpdate[];
 }
@@ -393,9 +504,18 @@ async function getLatestCandidatesByUpdateType(regulationId: string, updateType:
 async function findMatchingLatestAnchor(candidate: CandidateUpdate, regulationId: string) {
   const updateType = candidate.update_type ?? 'unspecified';
   const existingCandidates = await getLatestCandidatesByUpdateType(regulationId, updateType);
+  const candidateDate = parseCandidateDate(candidate);
 
   for (const existing of existingCandidates) {
     if (!existing.summary_text || !candidate.update_summary) continue;
+    const existingDate = parseMaybeDate(existing.deduced_published_date);
+
+    // Prevent matching across clearly different timeline windows.
+    if (!isTemporallyCompatible(candidateDate, existingDate)) continue;
+
+    if (summariesLikelySameUpdate(candidate.update_summary, existing.summary_text)) {
+      return existing;
+    }
 
     const isSame = await roughlySameUpdate(candidate.update_summary, existing.summary_text);
     if (isSame) {
@@ -417,11 +537,22 @@ async function expandSupportingArticleIds(
 
   for (const finalCandidate of finalCandidates) {
     if (!finalCandidate.update_summary || !finalCandidate.merged_article_ids?.length) continue;
+    const finalDate = parseCandidateDate(finalCandidate);
 
     const expandedArticleIds = new Set(finalCandidate.merged_article_ids);
 
     for (const supportCandidate of supportPool) {
       if (expandedArticleIds.has(supportCandidate.article_id)) continue;
+      if (
+        finalCandidate.update_type &&
+        supportCandidate.update_type &&
+        finalCandidate.update_type !== supportCandidate.update_type
+      ) {
+        continue;
+      }
+
+      const supportDate = parseCandidateDate(supportCandidate);
+      if (!isTemporallyCompatible(finalDate, supportDate)) continue;
 
       const isSame = await roughlySameUpdate(
         finalCandidate.update_summary,
@@ -435,6 +566,24 @@ async function expandSupportingArticleIds(
 
     finalCandidate.merged_article_ids = Array.from(expandedArticleIds);
   }
+}
+
+async function getLatestPublishedDateFromArticles(articleIds: number[]): Promise<string | null> {
+  if (!articleIds.length) return null;
+
+  const { data } = await supabase
+    .from('raw_articles')
+    .select('published_at')
+    .in('id', articleIds);
+
+  const latest = (data ?? [])
+    .map((row) => row.published_at as string | null)
+    .filter((date): date is string => Boolean(date))
+    .map((date) => dayjs(date))
+    .filter((date) => date.isValid() && !date.isAfter(dayjs()))
+    .sort((a, b) => b.valueOf() - a.valueOf())[0];
+
+  return latest?.toISOString() ?? null;
 }
 
 
@@ -535,97 +684,103 @@ export async function runRegulationPipeline({
     }
   }
 
-    // 5️⃣ Insert into verified_updates and latest_verified_updates
+  // 5️⃣ Insert into verified_updates and latest_verified_updates
 
   await expandSupportingArticleIds(finalCandidates, candidates);
 
-for (const candidate of finalCandidates) {
-  if (!candidate.update_summary || !candidate.merged_article_ids?.length) continue;
+  for (const candidate of finalCandidates) {
+    if (!candidate.update_summary || !candidate.merged_article_ids?.length) continue;
 
-  const impact_level = await inferImpactLevel(candidate.update_summary);
-  const matchedLatest = await findMatchingLatestAnchor(candidate, config.id);
-  const anchor = matchedLatest?.anchor ?? buildAnchor(candidate, config.id);
-  const currentLatest = await getCurrentLatestCandidate(config.id, anchor);
-  const mergedArticleIds = Array.from(
-    new Set([
-      ...(currentLatest?.related_article_ids ?? []),
-      ...candidate.merged_article_ids
-    ])
-  );
+    const impact_level = await inferImpactLevel(candidate.update_summary);
+    const matchedLatest = await findMatchingLatestAnchor(candidate, config.id);
+    const anchor = matchedLatest?.anchor ?? buildAnchor(candidate, config.id);
+    const currentLatest = await getCurrentLatestCandidate(config.id, anchor);
+    const mergedArticleIds = Array.from(
+      new Set([
+        ...(currentLatest?.related_article_ids ?? []),
+        ...candidate.merged_article_ids
+      ])
+    );
 
-  // Use candidate.event_month if available, else fallback to article date
-  const deducedPublishedDateRaw =
-    candidate.event_month && candidate.event_month !== 'unspecified'
-      ? `${candidate.event_month}-01`
-      : candidate.article_published_date ?? null;
+    const latestRelatedPublishedDate = await getLatestPublishedDateFromArticles(mergedArticleIds);
 
-  // ✅ Sanitize to avoid future dates
-  const deducedPublishedDate = sanitizePublishedDate(deducedPublishedDateRaw);
+    // Card date should follow source article publish date, not scan date/event inference.
+    const deducedPublishedDateRaw =
+      latestRelatedPublishedDate
+      ?? candidate.article_published_date
+      ?? (
+        candidate.event_month && candidate.event_month !== 'unspecified'
+          ? `${candidate.event_month}-01`
+          : null
+      );
 
-  const newDate = deducedPublishedDate ? dayjs(deducedPublishedDate) : dayjs();
+    // ✅ Sanitize to avoid future dates
+    const deducedPublishedDate = sanitizePublishedDate(deducedPublishedDateRaw);
 
-  const currentDate = currentLatest?.deduced_published_date
-    ? dayjs(currentLatest.deduced_published_date)
-    : null;
+    const newDate = deducedPublishedDate ? dayjs(deducedPublishedDate) : dayjs();
 
-  const isNewer = !currentDate || newDate.isAfter(currentDate);
+    const currentDate = currentLatest?.deduced_published_date
+      ? dayjs(currentLatest.deduced_published_date)
+      : null;
 
-  console.log({
-  anchor,
-  deducedPublishedDate,
-  newDate: newDate.format(),
-  currentDate: currentDate?.format(),
-  isNewer
-});
+    const isNewer = !currentDate || newDate.isAfter(currentDate);
 
-  // If newer, demote old latest
-  if (isNewer && currentLatest?.id) {
-    await supabase
-      .from('verified_updates')
-      .update({ is_latest: false })
-      .eq('id', currentLatest.id);
-  }
-
-  // Insert new verified update
-  const { error } = await supabase
-    .from('verified_updates')
-    .insert({
-      regulation: config.id,
+    console.log({
       anchor,
-      deduced_title: candidate.update_summary.slice(0, 100),
-      summary_text: candidate.update_summary,
-      impact_level,
-      related_article_ids: mergedArticleIds,
-      deduced_published_date: deducedPublishedDate, // ← use this!
-      is_latest: isNewer,
-      created_at: new Date().toISOString()
+      deducedPublishedDate,
+      newDate: newDate.format(),
+      currentDate: currentDate?.format(),
+      isNewer
     });
 
-  if (error) {
-    console.error('Insert verified_update error:', error);
-    continue;
-  }
-
-  if (!isNewer && currentLatest?.id && mergedArticleIds.length !== (currentLatest.related_article_ids?.length ?? 0)) {
-    const { error: updateLatestError } = await supabase
-      .from('verified_updates')
-      .update({ related_article_ids: mergedArticleIds })
-      .eq('id', currentLatest.id);
-
-    if (updateLatestError) {
-      console.error('Update latest verified_update article ids error:', updateLatestError);
+    // If newer, demote old latest
+    if (isNewer && currentLatest?.id) {
+      await supabase
+        .from('verified_updates')
+        .update({ is_latest: false })
+        .eq('id', currentLatest.id);
     }
+
+    // Insert new verified update
+    const { error } = await supabase
+      .from('verified_updates')
+      .insert({
+        regulation: config.id,
+        anchor,
+        deduced_title: candidate.update_summary.slice(0, 100),
+        summary_text: candidate.update_summary,
+        impact_level,
+        related_article_ids: mergedArticleIds,
+        deduced_published_date: deducedPublishedDate, // ← use this!
+        is_latest: isNewer,
+        created_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error('Insert verified_update error:', error);
+      continue;
+    }
+
+    if (!isNewer && currentLatest?.id && mergedArticleIds.length !== (currentLatest.related_article_ids?.length ?? 0)) {
+      const { error: updateLatestError } = await supabase
+        .from('verified_updates')
+        .update({ related_article_ids: mergedArticleIds })
+        .eq('id', currentLatest.id);
+
+      if (updateLatestError) {
+        console.error('Update latest verified_update article ids error:', updateLatestError);
+      }
+    }
+
+    // Mark contributing raw articles as processed
+    await supabase
+      .from('raw_articles')
+      .update({ is_processed: true })
+      .in('id', mergedArticleIds);
   }
 
-  // Mark contributing raw articles as processed
-  await supabase
-    .from('raw_articles')
-    .update({ is_processed: true })
-    .in('id', mergedArticleIds);
-}
-
-console.log('Pipeline finished for config:', config.id);
-return { ok: true, consensus: true };
+  console.log('Pipeline finished for config:', config.id);
+  return { ok: true, consensus: true };
 
 }
 

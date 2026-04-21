@@ -13,6 +13,9 @@ type Article = {
   id: number;
   title: string;
   url: string;
+  published_at?: string | null;
+  source_domain?: string | null;
+  is_trusted?: boolean;
 };
 
 type VerifiedUpdate = {
@@ -134,6 +137,7 @@ const backdropVariants: Variants = {
   visible: { opacity: 1 },
   exit: { opacity: 0 }
 };
+
 
 // ==========================================
 // 4. MAIN COMPONENT
@@ -580,8 +584,14 @@ export default function DashboardPage() {
                           rel="noopener noreferrer"
                           className="flex items-center justify-between p-4 rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-[var(--accent)]/50 bg-white/50 dark:bg-gray-800/50 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all group"
                         >
-                          <span className="text-blue-600 dark:text-blue-400 group-hover:underline text-sm font-medium">
-                            {article.title || article.url}
+                          <span className="flex min-w-0 flex-col">
+                            <span className="text-blue-600 dark:text-blue-400 group-hover:underline text-sm font-medium">
+                              {article.title || article.url}
+                            </span>
+                            <span className="mt-1 text-xs text-[var(--foreground)]/60">
+                              {article.source_domain || 'Unknown source'} | Updated: {formatDate(article.published_at)}
+                              {article.is_trusted ? ' | Trusted' : ''}
+                            </span>
                           </span>
                           <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
                         </a>
@@ -590,7 +600,7 @@ export default function DashboardPage() {
                   ) : (
                     <div className="text-center py-8 bg-white/50 dark:bg-gray-800/50 rounded-xl">
                       <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-[var(--foreground)]/60">No related articles found.</p>
+                        <p className="text-[var(--foreground)]/60">No related article found.</p>
                     </div>
                   )}
                 </section>

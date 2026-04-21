@@ -19,6 +19,12 @@ export type SemanticCluster = SemanticResult & {
 
 function buildSemanticResult(group: ArticleSummary[]): SemanticCluster {
   const now = dayjs();
+  const sortedByDate = [...group].sort((a, b) => {
+    const dateA = a.published_date ? dayjs(a.published_date).valueOf() : 0;
+    const dateB = b.published_date ? dayjs(b.published_date).valueOf() : 0;
+    return dateB - dateA;
+  });
+
   const latestDate = group
     .map(g => g.published_date)
     .filter(Boolean)
@@ -28,7 +34,9 @@ function buildSemanticResult(group: ArticleSummary[]): SemanticCluster {
     ?.toISOString() ?? null;
 
   return {
-    mergedSummary: group.map(g => g.summary).join(' '),
+    // Keep one focused summary for the cluster (newest supporting article),
+    // instead of concatenating one sentence per source.
+    mergedSummary: sortedByDate[0]?.summary ?? group[0]?.summary ?? '',
     articleIds: group.map(g => g.id),
     latestDate,
     size: group.length,
@@ -72,50 +80,42 @@ export async function semanticClusterSummaries(
   summaries: ArticleSummary[]
 ): Promise<SemanticCluster[]> {
   if (summaries.length === 0) return [];
-  const n = summaries.length;
+  const similarityCache = new Map<string, boolean>();
+  const groups: ArticleSummary[][] = [];
 
-  // Step 1: Build similarity matrix
-  const similarity: boolean[][] = Array.from({ length: n }, () =>
-    Array(n).fill(false)
-  );
+  const compareWithCache = async (a: string, b: string): Promise<boolean> => {
+    const left = a.trim();
+    const right = b.trim();
+    const key = left < right ? `${left}::${right}` : `${right}::${left}`;
 
-  for (let i = 0; i < n; i++) {
-    similarity[i][i] = true; // Each summary is similar to itself
+    if (similarityCache.has(key)) return similarityCache.get(key)!;
+    const isSame = await roughlySameUpdate(left, right);
+    similarityCache.set(key, isSame);
+    return isSame;
+  };
 
-    for (let j = i + 1; j < n; j++) {
-      const isSame = await roughlySameUpdate(summaries[i].summary, summaries[j].summary);
-      similarity[i][j] = isSame;
-      similarity[j][i] = isSame; // Symmetric
-    }
-}
+  // Strict clustering: a summary joins a group only if it matches the group's
+  // representative (oldest/newest first item), avoiding transitive over-merge.
+  for (const summary of summaries) {
+    let addedToGroup = false;
 
-  // Step 2: Find connected components (clusters) using DFS
-  const visited = Array(n).fill(false);
-  const clusters: ArticleSummary[][] = [];
+    for (const group of groups) {
+      const representative = group[0];
+      const isSame = await compareWithCache(representative.summary, summary.summary);
 
-  for (let i = 0; i < n; i++) {
-    if (visited[i]) continue;
-
-    const stack = [i];
-    const component: ArticleSummary[] = [];
-    visited[i] = true;
-
-    while (stack.length > 0) {
-      const current = stack.pop()!;
-      component.push(summaries[current]);
-    
-      for (let j = 0; j < n; j++) {
-        if(!visited[j] && similarity[current][j]) {
-          visited[j] = true;
-          stack.push(j);
-        }
+      if (isSame) {
+        group.push(summary);
+        addedToGroup = true;
+        break;
       }
     }
-    clusters.push(component);
+
+    if (!addedToGroup) {
+      groups.push([summary]);
+    }
   }
 
-  // Step 3: Convert to SemanticCluster and sort by size
-  return clusters
+  return groups
     .map(buildSemanticResult)
     .sort((a, b) => b.size - a.size);
 }
@@ -149,7 +149,7 @@ export async function roughlySameUpdate(a: string, b: string): Promise<boolean> 
     const response = await askOpenAI([
       {
         role: 'system',
-        content: 'You decide whether two summaries describe the same regulatory update.'
+        content: 'You decide whether two summaries describe the same regulatory update, even if wording differs, details are reordered, or languages differ.'
       },
       {
         role: 'user',
@@ -160,6 +160,7 @@ ${a}
 Summary B:
 ${b}
 
+Consider them the same when they refer to the same authority action/event/timeline.
 Answer only YES or NO.
       `
       }
