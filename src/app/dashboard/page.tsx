@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter } from 'lucide-react';
+import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter, Eye } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -15,7 +15,6 @@ type Article = {
   url: string;
   published_at?: string | null;
   source_domain?: string | null;
-  is_trusted?: boolean;
 };
 
 type VerifiedUpdate = {
@@ -25,7 +24,6 @@ type VerifiedUpdate = {
   deduced_title: string;
   summary_text: string;
   impact_level: 'high' | 'medium' | 'low';
-  primary_source_url: string | null;
   related_articles: Article[];
   deduced_published_date: string | null;
   created_at: string;
@@ -78,8 +76,18 @@ const getConfidence = (count: number) => {
  */
 const formatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'No date available';
+  const direct = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (direct) {
+    return `${direct[3]}/${direct[2]}/${direct[1]}`;
+  }
+
   const date = new Date(dateStr);
-  return isNaN(date.getTime()) ? 'No date available' : date.toLocaleDateString('en-GB');
+  
+  if (isNaN(date.getTime())) return 'No date available';
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = date.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 /**
@@ -137,7 +145,6 @@ const backdropVariants: Variants = {
   visible: { opacity: 1 },
   exit: { opacity: 0 }
 };
-
 
 // ==========================================
 // 4. MAIN COMPONENT
@@ -311,6 +318,14 @@ export default function DashboardPage() {
             >
               <Filter className="h-5 w-5" />
               Edit Regulations
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/product-impact')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:scale-105 active:scale-95"
+            >
+              <Eye className="h-5 w-5" />
+              Product Impact
             </button>
 
             <button
@@ -553,49 +568,34 @@ export default function DashboardPage() {
                   </p>
                 </section>
 
-                {modalOpen.primary_source_url && (
-                  <section className="mb-8">
-                    <h3 className="text-lg font-semibold mb-4 text-[var(--foreground)]">
-                      Primary Source
-                    </h3>
-                    <a
-                      href={modalOpen.primary_source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-5 py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:opacity-90 transition-all"
-                    >
-                      View Source Document
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </section>
-                )}
-
                 <section>
                   <h3 className="text-lg font-semibold mb-4 text-[var(--foreground)]">
                     Related Articles ({modalOpen.related_articles?.length || 0})
                   </h3>
                   {modalOpen.related_articles?.length > 0 ? (
                     <div className="space-y-3">
-                      {modalOpen.related_articles.map((article) => (
-                        <a
-                          key={article.id}
-                          href={article.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between p-4 rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-[var(--accent)]/50 bg-white/50 dark:bg-gray-800/50 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all group"
-                        >
-                          <span className="flex min-w-0 flex-col">
-                            <span className="text-blue-600 dark:text-blue-400 group-hover:underline text-sm font-medium">
-                              {article.title || article.url}
+                      {modalOpen.related_articles.map((article) => {
+                        return (
+                          <a
+                            key={article.id}
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-4 rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-[var(--accent)]/50 bg-white/50 dark:bg-gray-800/50 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all group"
+                          >
+                            <span className="flex min-w-0 flex-col">
+                              <span className="text-blue-600 dark:text-blue-400 group-hover:underline text-sm font-medium">
+                                {article.title || article.url}
+                              </span>
+                              <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--foreground)]/60">
+                                <span>{article.source_domain || 'Unknown source'}</span>
+                                <span>Updated: {formatDate(article.published_at)}</span>
+                              </span>
                             </span>
-                            <span className="mt-1 text-xs text-[var(--foreground)]/60">
-                              {article.source_domain || 'Unknown source'} | Updated: {formatDate(article.published_at)}
-                              {article.is_trusted ? ' | Trusted' : ''}
-                            </span>
-                          </span>
-                          <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
-                        </a>
-                      ))}
+                            <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
+                          </a>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8 bg-white/50 dark:bg-gray-800/50 rounded-xl">

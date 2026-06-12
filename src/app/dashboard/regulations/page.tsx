@@ -256,6 +256,8 @@ export default function RegulationsPage() {
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50">
               <label className="text-sm font-medium text-[var(--foreground)]/70">Sort by:</label>
               <select
+                id="sort-select"
+                aria-label="sort regulations"
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as 'name' | 'last_scanned_at')}
                 className="ml-2 bg-transparent text-[var(--foreground)] focus:outline-none"

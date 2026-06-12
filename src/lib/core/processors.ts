@@ -17,7 +17,7 @@ Article Text:
 --- START ARTICLE TEXT ---
 Title: ${article.title}
 URL: ${article.url}
-Published Date: ${article.published_date ?? 'N/A'}
+Published Date: ${article.published_at ?? article.published_date ?? 'N/A'}
 Content: ${article.content ?? article.snippet ?? "No content available."}
 --- END ARTICLE TEXT ---
 
@@ -35,7 +35,7 @@ Task:
    - Process/procedure changes ("process")
    - Timeline/schedule changes ("timeline")
    - Unknown → "unspecified"
-4. **update_summary**: Write 1-2 concise sentences describing the change. **Start the sentence with "On [Month] [Year], ..."**, using the month/year of the change (from event_month if available, otherwise the article's published date). Use neutral, standardized phrasing so semantically similar updates across articles can be matched. Avoid adjectives, opinions, or citations.
+4. **update_summary**: Write 1-2 concise sentences describing the change. **Start the sentence with "On [Month] [year], ...", using the month/year of the change (from event_month if available, otherwise the article's published date). Use neutral, standardized phrasing so semantically similar updates across articles can be matched. Avoid adjectives, opinions, or citations.
 
 Constraints:
 * Do NOT include evidence, verification, justification, or citations.
@@ -47,7 +47,7 @@ Output EXACT JSON ONLY:
   "update_type": "addition | revision | announcement | guidance",
   "event_month": "YYYY-MM | unspecified",
   "change_scope": "count_1 | count_2 | count_3+ | process | timeline | unspecified",
-  "update_summary": "Starts with 'On Month Year. ...' describing the change concisely"
+  "update_summary": "Concise change summary; starts with 'On Month Year, ...' describing the change with specific details and concisely."
 }
 `;
 };

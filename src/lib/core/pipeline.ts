@@ -1,5 +1,4 @@
 // External Libraries
-import * as chrono from 'chrono-node';
 import dayjs from 'dayjs';
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
@@ -15,7 +14,7 @@ import { supabase } from './database';
 import { askOpenAI } from './openai';
 import type { ArticleSummary } from '@/lib/core/semantic';
 import { roughlySameUpdate, semanticClusterSummaries } from '@/lib/core/semantic';
-import { tavilySearch, TavilyArticle as TavilyArticleCore } from './tavily';
+import { tavilyExtract, tavilySearch, TavilyArticle as TavilyArticleCore } from './tavily';
 
 // --- Type Definitions ---
 export type TavilyArticle = TavilyArticleCore & {
@@ -65,6 +64,125 @@ type ExistingRawArticle = {
   is_processed: boolean | null;
 };
 
+function toIsoFromYmd(year: number, month: number, day: number): string | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  return sanitizePublishedDate(new Date(Date.UTC(year, month - 1, day)).toISOString());
+}
+
+function monthNameToNumber(month: string): number | null {
+  const map: Record<string, number> = {
+    jan: 1, january: 1,
+    feb: 2, february: 2,
+    mar: 3, march: 3,
+    apr: 4, april: 4,
+    may: 5,
+    jun: 6, june: 6,
+    jul: 7, july: 7,
+    aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12
+  };
+  return map[month.toLowerCase()] ?? null;
+}
+
+function extractExplicitDateFromText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const normalized = text.replace(/\s+/g, ' ');
+
+  // Publication-style labels first (most reliable for article publish date).
+  const pubNumeric = normalized.match(/\b(?:publication|published|posted)\b\s*:?\s*([0-3]?\d)[./-]([01]?\d)[./-](20\d{2})\b/i);
+  if (pubNumeric) {
+    const day = Number(pubNumeric[1]);
+    const month = Number(pubNumeric[2]);
+    const year = Number(pubNumeric[3]);
+    const iso = toIsoFromYmd(year, month, day);
+    if (iso) return iso;
+  }
+
+  const pubDmy = normalized.match(/\b(?:publication date|published|posted)\b\s*:?\s*([0-3]?\d)\s+([A-Za-z]{3,9})\s+(20\d{2})\b/i);
+  if (pubDmy) {
+    const day = Number(pubDmy[1]);
+    const month = monthNameToNumber(pubDmy[2]);
+    const year = Number(pubDmy[3]);
+    if (month) return toIsoFromYmd(year, month, day);
+  }
+
+  const pubMdy = normalized.match(/\b(?:publication date|published|posted)\b\s*:?\s*([A-Za-z]{3,9})\s+([0-3]?\d),\s*(20\d{2})\b/i);
+  if (pubMdy) {
+    const month = monthNameToNumber(pubMdy[1]);
+    const day = Number(pubMdy[2]);
+    const year = Number(pubMdy[3]);
+    if (month) return toIsoFromYmd(year, month, day);
+  }
+
+  // e.g. 31 Mar 2026 / 31 March 2026
+  const dmy = normalized.match(/\b([0-3]?\d)\s+([A-Za-z]{3,9})\s+(20\d{2})\b/);
+  if (dmy) {
+    const day = Number(dmy[1]);
+    const month = monthNameToNumber(dmy[2]);
+    const year = Number(dmy[3]);
+    if (month) return toIsoFromYmd(year, month, day);
+  }
+
+  // e.g. March 31, 2026
+  const mdy = normalized.match(/\b([A-Za-z]{3,9})\s+([0-3]?\d),\s*(20\d{2})\b/);
+  if (mdy) {
+    const month = monthNameToNumber(mdy[1]);
+    const day = Number(mdy[2]);
+    const year = Number(mdy[3]);
+    if (month) return toIsoFromYmd(year, month, day);
+  }
+
+  return null;
+}
+
+function extractDateFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/(?:^|\/)(20\d{2})[\/-](0[1-9]|1[0-2])(?:[\/-](0[1-9]|[12]\d|3[01]))?(?:\/|$)/);
+  if (!match) return null;
+
+  const year = match[1];
+  const month = match[2];
+  const day = match[3] ?? '01';
+  return sanitizePublishedDate(`${year}-${month}-${day}T00:00:00Z`);
+}
+
+function extractDateFromHtmlContent(content: string | null | undefined): string | null {
+  if (!content) return null;
+
+  const metaPatterns = [
+    /<meta[^>]*(?:name|property)=["']article:published_time["'][^>]*content=["']([^"']+)["']/i,
+    /<meta[^>]*(?:name|property)=["']publishdate["'][^>]*content=["']([^"']+)["']/i,
+    /<meta[^>]*(?:name|property)=["']pubdate["'][^>]*content=["']([^"']+)["']/i,
+    /<meta[^>]*(?:name|property)=["']date["'][^>]*content=["']([^"']+)["']/i,
+    /<meta[^>]*(?:name|property)=["']dc\.date["'][^>]*content=["']([^"']+)["']/i
+  ];
+
+  for (const pattern of metaPatterns) {
+    const match = content.match(pattern);
+    const sanitized = sanitizePublishedDate(match?.[1] ?? null);
+    if (sanitized) return sanitized;
+  }
+
+  const jsonLdPatterns = [
+    /"datePublished"\s*:\s*"([^"]+)"/i,
+    /"dateCreated"\s*:\s*"([^"]+)"/i
+  ];
+
+  for (const pattern of jsonLdPatterns) {
+    const match = content.match(pattern);
+    const sanitized = sanitizePublishedDate(match?.[1] ?? null);
+    if (sanitized) return sanitized;
+  }
+
+  const timeMatch = content.match(/<time[^>]*datetime=["']([^"']+)["'][^>]*>/i);
+  return sanitizePublishedDate(timeMatch?.[1] ?? null);
+}
+
 // ---------------------------------------------------------
 // Scan and store articles
 // ---------------------------------------------------------
@@ -75,7 +193,8 @@ export async function scanAndStoreArticles(
   console.log(`Scanning articles for config: ${config.id}`);
 
   const aggregatedResults: TavilyArticle[] = [];
-  const oneYearAgo = dayjs().subtract(1, 'year').startOf('day');
+  const now = dayjs();
+  const oneYearAgo = now.subtract(1, 'year').startOf('day');
 
   for (const query of config.searchQueries) {
     try {
@@ -85,38 +204,65 @@ export async function scanAndStoreArticles(
         max_results: maxPerQuery,
         include_answer: false
       });
+      const fallbackExtractionCache = new Map<string, { publishedDate: string | null; content: string | null }>();
+      let fallbackExtractionAttempts = 0;
+      const maxFallbackExtractionAttempts = Math.min(6, maxPerQuery);
 
       for (const r of results || []) {
-        let publishedDate = r.published_date;
+        const candidate: TavilyArticle = { ...r };
 
-        // Step 1: Extract from article content / HTML
-        if (!publishedDate && r.content) {
-          const htmlMatch = r.content.match(
-            /<meta[^>]*(?:name|property)=["'](?:article:published_time|date)["'][^>]*content=["']([^"']+)["']/i
-          );
-          if (htmlMatch) publishedDate = htmlMatch[1];
-        }
-
-        // Step 2: Fallback to parsing title/snippet text for dates (less noisy than full content)
+        // Prioritize explicit structured dates; avoid free-text chrono parsing (too noisy).
+        let publishedDate = sanitizePublishedDate(candidate.published_date ?? null);
         if (!publishedDate) {
-          const dateProbeText = [r.title, r.snippet].filter(Boolean).join(' ');
-          const parsed = chrono.parse(dateProbeText);
-          if (parsed.length > 0) {
-            publishedDate = parsed[0].date().toISOString();
+          publishedDate = extractDateFromHtmlContent(candidate.content);
+        }
+        if (!publishedDate) {
+          publishedDate = extractExplicitDateFromText([candidate.title, candidate.snippet, candidate.content].filter(Boolean).join(' '));
+        }
+        // Intentionally avoid URL-date fallback (often picks non-publication dates).
+
+        // Fallback extraction for results that still have no reliable published date.
+        if (!publishedDate && candidate.url && fallbackExtractionAttempts < maxFallbackExtractionAttempts) {
+          let extracted = fallbackExtractionCache.get(candidate.url);
+
+          if (!extracted) {
+            fallbackExtractionAttempts += 1;
+            try {
+              const extraction = await tavilyExtract(candidate.url);
+              const extractedText = [extraction.rawContent, extraction.markdownContent]
+                .filter(Boolean)
+                .join('\n');
+              const extractedPublished =
+                extractDateFromHtmlContent(extractedText)
+                ?? extractExplicitDateFromText(extractedText);
+
+              extracted = {
+                publishedDate: extractedPublished,
+                content: extractedText || null
+              };
+              fallbackExtractionCache.set(candidate.url, extracted);
+            } catch (extractErr) {
+              console.warn('Tavily extract fallback failed:', candidate.url, extractErr);
+              fallbackExtractionCache.set(candidate.url, { publishedDate: null, content: null });
+              extracted = { publishedDate: null, content: null };
+            }
+          }
+
+          if (extracted?.publishedDate) {
+            publishedDate = extracted.publishedDate;
+          }
+          if (!candidate.content && extracted?.content) {
+            candidate.content = extracted.content;
           }
         }
 
-        // Final check datetime is valid
-        if (!publishedDate && r.content) {
-          const htmlMatch = r.content.match(
-            /<time[^>]*datetime=["']([^"']+)["'][^>]*>/i
-          );
-          if (htmlMatch) publishedDate = htmlMatch[1];
-        }
-
-        // Step 3: Only keep articles from the last year
-        if (publishedDate && dayjs(publishedDate).isSameOrAfter(oneYearAgo)) {
-          aggregatedResults.push({ ...r, published_at: publishedDate });
+        // Step 3: Keep only articles from the last year and reject future dates.
+        const sanitizedPublished = sanitizePublishedDate(publishedDate ?? null);
+        if (sanitizedPublished) {
+          const parsedPublished = dayjs(sanitizedPublished);
+          if (parsedPublished.isSameOrAfter(oneYearAgo) && parsedPublished.isSameOrBefore(now)) {
+            aggregatedResults.push({ ...candidate, published_at: sanitizedPublished });
+          }
         }
       }
 
@@ -238,6 +384,12 @@ export async function synthesizeArticles(
       parsed.article_id = article.id ?? null;
       // Prefer source article published date over model-inferred date.
       parsed.article_published_date = article.published_at ?? parsed.article_published_date ?? null;
+      parsed.event_month = normalizeEventMonth(parsed.event_month, parsed.article_published_date);
+      parsed.update_summary = normalizeGeneratedSummary(
+        parsed.update_summary,
+        parsed.event_month,
+        parsed.article_published_date
+      );
       results.push(parsed);
 
     } catch (err) {
@@ -315,6 +467,45 @@ function normalizeSummaryForFingerprint(summary: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+function ensureSentence(text: string): string {
+  const trimmed = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) return '';
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function normalizeGeneratedSummary(
+  summary: string | null | undefined,
+  eventMonth: unknown,
+  fallbackPublishedDate?: string | null
+): string {
+  const normalized = (summary ?? '').replace(/\s+/g, ' ').trim();
+  const normalizedEventMonth = normalizeEventMonth(eventMonth, fallbackPublishedDate);
+  const displayMonth = normalizedEventMonth !== 'unspecified'
+    ? dayjs(`${normalizedEventMonth}-01`).format('MMMM YYYY')
+    : null;
+
+  if (!normalized) {
+    return displayMonth
+      ? `On ${displayMonth}, the authority announced a regulatory update.`
+      : 'The authority announced a regulatory update.';
+  }
+
+  if (/^On\s+(?:an?\s+)?unspecified(?:\s+date)?\b/i.test(normalized)) {
+    const remainder = normalized.replace(/^On\s+(?:an?\s+)?unspecified(?:\s+date)?\s*,?\s*/i, '');
+    return displayMonth
+      ? `On ${displayMonth}, ${ensureSentence(remainder)}`
+      : ensureSentence(remainder);
+  }
+
+  if (/^On\s+[A-Za-z]+\s+\d{4}\b/i.test(normalized)) {
+    return normalized.replace(/^On\s+([A-Za-z]+\s+\d{4})\s*\.\s*/i, 'On $1, ');
+  }
+
+  return displayMonth
+    ? `On ${displayMonth}, ${ensureSentence(normalized)}`
+    : ensureSentence(normalized);
 }
 
 function normalizeComparableText(value: string | null | undefined): string {
@@ -420,9 +611,7 @@ function buildFallbackCandidate(article: TavilyArticle): CandidateUpdate {
   const eventMonth = published && dayjs(published).isValid()
     ? dayjs(published).format('YYYY-MM')
     : 'unspecified';
-  const displayMonth = eventMonth !== 'unspecified'
-    ? dayjs(`${eventMonth}-01`).format('MMMM YYYY')
-    : 'an unspecified date';
+  const baseSummary = article.title ?? 'the authority announced a regulatory update';
 
   return {
     article_id: article.id ?? null,
@@ -430,7 +619,7 @@ function buildFallbackCandidate(article: TavilyArticle): CandidateUpdate {
     update_type: inferFallbackUpdateType(sourceText),
     event_month: eventMonth,
     change_scope: inferFallbackChangeScope(sourceText),
-    update_summary: `On ${displayMonth}, ${article.title ?? 'the authority announced a regulatory update'}.`
+    update_summary: normalizeGeneratedSummary(baseSummary, eventMonth, published)
   };
 }
 
@@ -439,6 +628,7 @@ function sanitizePublishedDate(dateStr: string | null): string | null {
 
   const parsed = dayjs(dateStr);
   const now = dayjs();
+  if (!parsed.isValid()) return null;
 
   // If parsed date is in the future, discard it
   if (parsed.isAfter(now)) return null;
@@ -462,8 +652,8 @@ function normalizeEventMonth(eventMonth: unknown, fallbackPublishedDate?: string
     }
   }
 
-  // Default fallback (should not happen in normal operation)
-  return dayjs().format('YYYY-MM');
+  // Keep unknown values explicit instead of inventing a current month.
+  return 'unspecified';
 }
 
 
@@ -811,7 +1001,9 @@ export async function runAllRegulationsPipeline() {
         config: {
           id: regulation.id,
           searchQueries: profile.search_queries
-        }
+        },
+        synthesisPromptBuilder: buildSynthesisPrompt,
+        maxSearchPerQuery: 20
       });
     }
 
