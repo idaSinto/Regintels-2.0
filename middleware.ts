@@ -18,5 +18,7 @@ export const config = {
     '/api/impact-keywords',
     '/api/run-pipeline',
     '/api/send-newsletter',
+    '/api/sharepoint/product-impact',
+    '/api/staff-users/:path*',
   ],
 };

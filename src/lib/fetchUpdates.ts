@@ -1,4 +1,5 @@
-// D:\Regintels\my-regintel\src\lib\fetchUpdates.ts
+import { supabase } from '@/lib/core/database';
+
 export interface Article {
   id: number;
   title: string;
@@ -8,19 +9,25 @@ export interface Article {
 }
 
 export async function fetchUpdates(): Promise<Article[]> {
-  const res = await fetch('http://localhost:3000/api/latest-verified-updates'); 
-  if (!res.ok) {
-    console.error('Failed to fetch updates');
+  const { data, error } = await supabase
+    .from('latest_verified_updates')
+    .select(`
+      regulation_id,
+      deduced_published_date,
+      verified_updates:verified_update_id(*)
+    `)
+    .order('deduced_published_date', { ascending: false });
+
+  if (error) {
+    console.error('Failed to fetch updates:', error);
     return [];
   }
-  const data = await res.json();
 
-  // Map to newsletter-friendly structure
-  return data.map((item: any) => ({
-    id: item.id,
-    title: item.deduced_title,
-    summary_text: item.summary_text,
-    link: item.primary_source_url || '#', 
-    regulation: item.regulation,
+  return (data ?? []).map((item: Record<string, unknown>) => ({
+    id: (item as { verified_updates?: { id?: number } }).verified_updates?.id ?? 0,
+    title: (item as { verified_updates?: { deduced_title?: string } }).verified_updates?.deduced_title ?? '',
+    summary_text: (item as { verified_updates?: { summary_text?: string } }).verified_updates?.summary_text ?? '',
+    link: (item as { verified_updates?: { primary_source_url?: string } }).verified_updates?.primary_source_url ?? '#',
+    regulation: String((item as { regulation_id?: unknown }).regulation_id ?? ''),
   }));
 }

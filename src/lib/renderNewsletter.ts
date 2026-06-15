@@ -1,13 +1,35 @@
 import { Article } from './fetchUpdates';
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function sanitizeUrl(url: string | undefined): string {
+  if (!url) return '#';
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return escapeHtml(parsed.href);
+    }
+    return '#';
+  } catch {
+    return '#';
+  }
+}
+
 export function renderNewsletter(articles: Article[]): string {
   const rows = articles.map(
     (a) => `
       <tr>
         <td style="padding:10px 40px;font-family:Arial;font-size:14px;line-height:1.5">
-          <h3 style="margin:0 0 5px 0">${a.title}</h3>
-          <p style="margin:0 0 5px 0">${a.summary_text}</p>
-          <a href="${a.link}" style="color:#2C74FF;text-decoration:underline">Learn more</a>
+          <h3 style="margin:0 0 5px 0">${escapeHtml(a.title)}</h3>
+          <p style="margin:0 0 5px 0">${escapeHtml(a.summary_text)}</p>
+          <a href="${sanitizeUrl(a.link)}" style="color:#2C74FF;text-decoration:underline">Learn more</a>
         </td>
       </tr>
     `

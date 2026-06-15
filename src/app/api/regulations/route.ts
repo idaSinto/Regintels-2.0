@@ -1,5 +1,15 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { supabase } from '@/lib/core/database';
+
+const CreateRegulationSchema = z.object({
+  name: z.string().min(1).max(255),
+  regulation_search_profiles: z.object({
+    authority: z.string().min(1).max(255).optional(),
+    search_queries: z.array(z.string().max(500)).max(50).optional(),
+    primary_sources: z.array(z.string().url().max(2000)).max(20).nullable().optional(),
+  }).optional(),
+});
 
 export async function GET() {
   const { data, error } = await supabase
@@ -24,8 +34,12 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name, regulation_search_profiles } = body;
-  const { authority, search_queries, primary_sources } = regulation_search_profiles || {};
+  const parsed = CreateRegulationSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+  const { name, regulation_search_profiles } = parsed.data;
+  const { authority, search_queries, primary_sources } = regulation_search_profiles ?? {};
 
   // Step 1: create regulation
   const { data: regData, error: regError } = await supabase
