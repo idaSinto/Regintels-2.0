@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources, 
+        primary_sources,
         secondary_sources
       )
     `)
