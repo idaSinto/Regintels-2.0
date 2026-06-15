@@ -59,7 +59,7 @@ function classifySource(
 
   const isSecondary = secondarySources.some(d => {
     const norm = d.toLowerCase().replace(/^www\./, '');
-    return hostname === norm || hostname.endsWith(`.${norm}`);
+    return hostname === norm || hostname?.endsWith(`.${norm}`);
   })
   if (isSecondary) { return { sourceType: 'SECONDARY', confidence: 80 }; }
 
@@ -393,8 +393,11 @@ export async function scanAndStoreArticles(
   return Array.from(new Set(insertedIds));
 }
 
+<<<<<<< HEAD
 // Parse a model response into JSON, tolerating Markdown code fences
 // (e.g. ```json ... ```) and surrounding prose that some models emit.
+=======
+>>>>>>> origin/main
 function parseModelJson(response: unknown): CandidateUpdate | null {
   if (response && typeof response === 'object') return response as CandidateUpdate;
   if (typeof response !== 'string') return null;
@@ -415,7 +418,11 @@ function parseModelJson(response: unknown): CandidateUpdate | null {
         return null;
       }
     }
+<<<<<<< HEAD
     return null;
+=======
+    return null; 
+>>>>>>> origin/main
   }
 }
 
