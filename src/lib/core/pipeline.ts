@@ -59,7 +59,7 @@ function classifySource(
 
   const isSecondary = secondarySources.some(d => {
     const norm = d.toLowerCase().replace(/^www\./, '');
-    return hostname === norm || hostname.endsWith('.${norm');
+    return hostname === norm || hostname.endsWith(`.${norm}`);
   })
   if (isSecondary) { return { sourceType: 'SECONDARY', confidence: 80 }; }
 

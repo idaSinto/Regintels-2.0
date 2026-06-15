@@ -18,7 +18,8 @@ export async function GET(req: Request) {
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources
+        primary_sources,
+        secondary_sources
       )
     `)
     .eq('is_active', true);
@@ -62,11 +63,14 @@ export async function GET(req: Request) {
     for (const profile of profiles) {
       const searchQueries = Array.isArray(profile.search_queries) ? profile.search_queries : [];
       const primarySources = Array.isArray(profile.primary_sources) ? profile.primary_sources : [];
+      const secondarySources = Array.isArray(profile.secondary_sources) ? profile.secondary_sources : [];
 
       const config = {
         id: String(reg.id),
         regulationName: reg.name,
         searchQueries,
+        primarySources,
+        secondarySources,
         primarySourceUrl: primarySources[0] ?? undefined,
       };
 
