@@ -26,10 +26,45 @@ export type RegConfig = {
   id: string;
   searchQueries: string[];
   primarySourceUrl?: string;
+  primarySources?: string[];
+  secondarySources?: string[];
   allowedDomains?: string[];
   triggerWords?: string[];
   maxArticles?: number;
 };
+
+type sourceType = 'PRIMARY' | 'SECONDARY' | 'UNKNOWN';
+
+function classifySource(
+  url: string | null | undefined,
+  primarySources: string[],
+  secondarySources: string[]
+): { sourceType: sourceType; confidence: number } {
+  if (!url) return { sourceType: 'UNKNOWN', confidence: 30};
+
+  const hostname = (() => {
+    try {
+      return new URL(url).hostname.replace(/^www\./,'').toLowerCase();
+    } catch {
+      return null;
+    }
+  })();
+  if (!hostname) return { sourceType: 'UNKNOWN', confidence: 30 };
+
+  const isPrimary = primarySources.some(d => {
+    const norm = d.toLowerCase().replace(/^www\./,'');
+    return hostname === norm || hostname.endsWith(`.${norm}`);
+  });
+  if (isPrimary) { return { sourceType: 'PRIMARY', confidence: 100 }; }
+
+  const isSecondary = secondarySources.some(d => {
+    const norm = d.toLowerCase().replace(/^www\./, '');
+    return hostname === norm || hostname.endsWith('.${norm');
+  })
+  if (isSecondary) { return { sourceType: 'SECONDARY', confidence: 80 }; }
+
+  return { sourceType: 'UNKNOWN', confidence: 30 };
+}
 
 export type CandidateUpdate = {
   article_id?: number | null;
@@ -140,16 +175,16 @@ function extractExplicitDateFromText(text: string | null | undefined): string | 
   return null;
 }
 
-function extractDateFromUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const match = url.match(/(?:^|\/)(20\d{2})[\/-](0[1-9]|1[0-2])(?:[\/-](0[1-9]|[12]\d|3[01]))?(?:\/|$)/);
-  if (!match) return null;
+// function extractDateFromUrl(url: string | null | undefined): string | null {
+//   if (!url) return null;
+//   const match = url.match(/(?:^|\/)(20\d{2})[\/-](0[1-9]|1[0-2])(?:[\/-](0[1-9]|[12]\d|3[01]))?(?:\/|$)/);
+//   if (!match) return null;
 
-  const year = match[1];
-  const month = match[2];
-  const day = match[3] ?? '01';
-  return sanitizePublishedDate(`${year}-${month}-${day}T00:00:00Z`);
-}
+//   const year = match[1];
+//   const month = match[2];
+//   const day = match[3] ?? '01';
+//   return sanitizePublishedDate(`${year}-${month}-${day}T00:00:00Z`);
+// }
 
 function extractDateFromHtmlContent(content: string | null | undefined): string | null {
   if (!content) return null;
@@ -187,9 +222,13 @@ function extractDateFromHtmlContent(content: string | null | undefined): string 
 // Scan and store articles
 // ---------------------------------------------------------
 export async function scanAndStoreArticles(
-  config: { id: string; searchQueries: string[] },
+  config: { id: string; searchQueries: string[]; primarySources?: string[]; secondarySources?: string[] },
   maxPerQuery = 12
 ): Promise<number[]> {
+
+  const primarySources = config.primarySources ?? [];
+  const secondarySources = config.secondarySources ?? [];
+
   console.log(`Scanning articles for config: ${config.id}`);
 
   const aggregatedResults: TavilyArticle[] = [];
@@ -285,6 +324,8 @@ export async function scanAndStoreArticles(
   // Insert deduped articles into database
   const insertedIds: number[] = [];
   for (const art of aggregatedResults) {
+    const { sourceType, confidence } = classifySource(art.url, primarySources, secondarySources);
+
     try {
       const { data: existing } = await supabase
         .from('raw_articles')
@@ -305,7 +346,9 @@ export async function scanAndStoreArticles(
             source: art.source ?? art.domain ?? null,
             regulation: config.id,
             is_processed: false,
-            published_at: art.published_at ?? null
+            published_at: art.published_at ?? null,
+            source_type: sourceType,
+            confidence_score: confidence
           })
           .select('id')
           .single();
@@ -313,7 +356,7 @@ export async function scanAndStoreArticles(
         if (error) console.error('Insert raw article error:', error);
         if (data?.id) {
           insertedIds.push(data.id);
-          console.log('Inserted raw article ID:', data.id);
+          console.log(`Inserted raw article ID: ${data.id} [${sourceType}/${confidence}]`);
         }
         continue;
       }
@@ -328,6 +371,8 @@ export async function scanAndStoreArticles(
             content: art.content ?? existingRow.content,
             source: art.source ?? art.domain ?? null,
             published_at: art.published_at ?? existingRow.published_at,
+            source_type: sourceType,
+            confidence_score: confidence,
             is_processed: false
           })
           .eq('id', existingRow.id);
@@ -338,7 +383,7 @@ export async function scanAndStoreArticles(
         }
 
         insertedIds.push(existingRow.id);
-        console.log('Queued updated raw article ID:', existingRow.id);
+        console.log(`Queued updated raw article ID: ${existingRow.id} [${sourceType}/${confidence}]`);
       }
     } catch (err) {
       console.error('Insert article exception', art.url, err);
@@ -800,7 +845,7 @@ export async function runRegulationPipeline({
   // 2️⃣ Fetch newly inserted articles
   const { data: rawRows } = await supabase
     .from('raw_articles')
-    .select('*')
+    .select('*, source_type, confidence_score')
     .in('id', insertedIds)
     .order('published_at', { ascending: false });
 
@@ -931,6 +976,20 @@ export async function runRegulationPipeline({
         .eq('id', currentLatest.id);
     }
 
+    // After mergedArticleIds is assembled, before the verified_updates insert
+    const { data: mergedArticlesRows } = await supabase
+      .from('raw_articles')
+      .select('confidence_score, source_type')
+      .in('id', mergedArticleIds);
+
+    const scores = (mergedArticlesRows ??  [])
+      .map((r) => r.confidence_score as number)
+      .filter((s): s is number => typeof s === 'number');
+
+    // Use the highest confidence score among all supporting articles
+    const maxConfidence = scores.length ? Math.max(...scores) : 30;
+    const hasPrimarySource = (mergedArticlesRows ?? []).some(r => r.source_type === 'PRIMARY');
+
     // Insert new verified update
     const { error } = await supabase
       .from('verified_updates')
@@ -943,6 +1002,8 @@ export async function runRegulationPipeline({
         related_article_ids: mergedArticleIds,
         deduced_published_date: deducedPublishedDate, // ← use this!
         is_latest: isNewer,
+        confidence_score: maxConfidence,
+        has_primary_source: hasPrimarySource,
         created_at: new Date().toISOString()
       });
 
@@ -986,7 +1047,8 @@ export async function runAllRegulationsPipeline() {
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources
+        primary_sources, 
+        secondary_sources
       )
     `);
 
@@ -1000,7 +1062,9 @@ export async function runAllRegulationsPipeline() {
       await runRegulationPipeline({
         config: {
           id: regulation.id,
-          searchQueries: profile.search_queries
+          searchQueries: profile.search_queries,
+          primarySources: profile.primary_sources ?? [],
+          secondarySources: profile.secondary_sources ?? []
         },
         synthesisPromptBuilder: buildSynthesisPrompt,
         maxSearchPerQuery: 20
