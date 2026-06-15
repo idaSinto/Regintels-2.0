@@ -4,7 +4,7 @@ import { supabase } from '@/lib/core/database';
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const id = parseInt(params.id);
   const body = await req.json();
-  const { name, authority, search_queries, primary_sources } = body;
+  const { name, authority, search_queries, primary_sources, secondary_sources } = body;
 
   // Update regulation
   const { error: regError } = await supabase
@@ -20,7 +20,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     .update({
       authority,
       search_queries: Array.isArray(search_queries) ? search_queries : [],
-      primary_sources: Array.isArray(primary_sources) ? primary_sources : null
+      primary_sources: Array.isArray(primary_sources) ? primary_sources : null,
+      secondary_sources: Array.isArray(secondary_sources) ? secondary_sources : null
     })
     .eq('regulation_id', id);
 

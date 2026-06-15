@@ -11,7 +11,8 @@ export async function GET() {
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources
+        primary_sources,
+        secondary_sources
       )
     `)
     .eq('is_active', true)
@@ -25,7 +26,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json();
   const { name, regulation_search_profiles } = body;
-  const { authority, search_queries, primary_sources } = regulation_search_profiles || {};
+  const { authority, search_queries, primary_sources, secondary_sources } = regulation_search_profiles || {};
 
   // Step 1: create regulation
   const { data: regData, error: regError } = await supabase
@@ -43,7 +44,8 @@ export async function POST(req: Request) {
       regulation_id: regData.id,
       authority,
       search_queries: Array.isArray(search_queries) ? search_queries : [],
-      primary_sources: Array.isArray(primary_sources) ? primary_sources : null
+      primary_sources: Array.isArray(primary_sources) ? primary_sources : null,
+      secondary_sources: Array.isArray(secondary_sources) ? secondary_sources : null
     }]);
 
   if (profileError) return NextResponse.json({ error: profileError }, { status: 500 });

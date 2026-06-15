@@ -15,6 +15,7 @@ type Regulation = {
     authority: string;
     search_queries: string[];
     primary_sources?: string[] | null;
+    secondary_sources?: string[] | null;
   };
 };
 
@@ -31,6 +32,8 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
   const [name, setName] = useState(regulation?.name || '');
   const [authority, setAuthority] = useState(regulation?.regulation_search_profiles?.authority || '');
   const [queries, setQueries] = useState((regulation?.regulation_search_profiles?.search_queries || []).join('\n'));
+  const [primarySources, setPrimarySources] = useState((regulation?.regulation_search_profiles?.primary_sources || []).join('\n'));
+  const [secondarySources, setSecondarySources] = useState((regulation?.regulation_search_profiles?.secondary_sources || []).join('\n'));
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -41,14 +44,31 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
       const method = regulation ? 'PUT' : 'POST';
       const url = regulation ? `/api/regulations/${regulation.id}` : '/api/regulations';
       const searchQueries = queries.split('\n').filter(q => q.trim());
+      const primarySourcesList = primarySources.split('\n').filter(s => s.trim());
+      const secondarySourcesList = secondarySources.split('\n').filter(s => s.trim());
+
+      const payload = regulation
+        ? {
+            name: name.trim(),
+            authority: authority.trim(),
+            search_queries: searchQueries,
+            primary_sources: primarySourcesList.length ? primarySourcesList : null,
+            secondary_sources: secondarySourcesList.length ? secondarySourcesList : null,
+          }
+        : {
+            name: name.trim(),
+            regulation_search_profiles: {
+              authority: authority.trim(),
+              search_queries: searchQueries,
+              primary_sources: primarySourcesList.length ? primarySourcesList : null,
+              secondary_sources: secondarySourcesList.length ? secondarySourcesList : null,
+            },
+          };
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          regulation_search_profiles: { authority: authority.trim(), search_queries: searchQueries },
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) { onSave(); onClose(); }
@@ -109,8 +129,34 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
               value={queries}
               onChange={e => setQueries(e.target.value)}
               rows={4}
-              placeholder="Enter search queries..."
+              placeholder="Enter search queries (one per line)..."
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">
+              Primary Sources
+              <span className="ml-1 text-xs font-normal text-[var(--foreground)]/50">(confidence: 100)</span>
+            </label>
+            <textarea
+              value={primarySources}
+              onChange={e => setPrimarySources(e.target.value)}
+              rows={2}
+              placeholder="e.g. echa.europa.eu (one domain per line)"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">
+              Secondary Sources
+              <span className="ml-1 text-xs font-normal text-[var(--foreground)]/50">(confidence: 80)</span>
+            </label>
+            <textarea
+              value={secondarySources}
+              onChange={e => setSecondarySources(e.target.value)}
+              rows={2}
+              placeholder="e.g. chemicalwatch.com (one domain per line)"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-sm"
             />
           </div>
         </div>
@@ -361,6 +407,20 @@ export default function RegulationsPage() {
                           +{reg.regulation_search_profiles.search_queries.length - 3} more
                         </span>
                       )}
+                    </div>
+
+                    {/* Source classification indicators */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {reg.regulation_search_profiles?.primary_sources?.length ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                          {reg.regulation_search_profiles.primary_sources.length} primary
+                        </span>
+                      ) : null}
+                      {reg.regulation_search_profiles?.secondary_sources?.length ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          {reg.regulation_search_profiles.secondary_sources.length} secondary
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
