@@ -393,6 +393,32 @@ export async function scanAndStoreArticles(
   return Array.from(new Set(insertedIds));
 }
 
+// Parse a model response into JSON, tolerating Markdown code fences
+// (e.g. ```json ... ```) and surrounding prose that some models emit.
+function parseModelJson(response: unknown): CandidateUpdate | null {
+  if (response && typeof response === 'object') return response as CandidateUpdate;
+  if (typeof response !== 'string') return null;
+
+  let text = response.trim();
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) text = fenced[1].trim();
+
+  try {
+    return JSON.parse(text) as CandidateUpdate;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1)) as CandidateUpdate;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 // ---------------------------------------------------------
 // Synthesize articles using OpenAI 
 // ---------------------------------------------------------
@@ -418,10 +444,8 @@ export async function synthesizeArticles(
         { role: 'user', content: prompt }
       ]);
 
-      let parsed: CandidateUpdate;
-      try {
-        parsed = typeof response === 'string' ? JSON.parse(response) : response;
-      } catch {
+      const parsed = parseModelJson(response);
+      if (!parsed) {
         console.warn('OpenAI returned non-JSON response, skipping article:', article.url, 'Response:', response);
         continue;
       }
