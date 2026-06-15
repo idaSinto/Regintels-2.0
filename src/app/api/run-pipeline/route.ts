@@ -6,9 +6,9 @@ import { buildSynthesisPrompt } from '@/lib/core/processors';
 // ==========================================
 // PIPELINE TRIGGER HANDLER
 // ==========================================
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const regIdParam = url.searchParams.get('regulationId'); // e.g., "39" or "39,42"
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({})) as { regulationId?: string };
+  const regIdParam = body.regulationId ?? null;
 
   let query = supabase
     .from('regulations')

@@ -6,7 +6,15 @@ import { renderNewsletter } from '@/lib/renderNewsletter';
 // ==========================================
 // EMAIL DISPATCH HANDLER
 // ==========================================
-export async function GET() {
+export async function POST() {
+  const recipientEmail = process.env.NEWSLETTER_RECIPIENT_EMAIL;
+  if (!recipientEmail) {
+    return NextResponse.json(
+      { status: 'error', message: 'NEWSLETTER_RECIPIENT_EMAIL is not configured.' },
+      { status: 500 },
+    );
+  }
+
   // 1. Prepare data and generate the HTML email content
   const articles = await fetchUpdates();
   const html = renderNewsletter(articles);
@@ -24,7 +32,7 @@ export async function GET() {
     // 3. Attempt to send the email
     await transporter.sendMail({
       from: `"Regintels" <${process.env.EMAIL_USER}>`,
-      to: 'h@prefchem.com.my', // Hardcoded recipient
+      to: recipientEmail,
       subject: 'Weekly Regulatory Updates',
       html,
     });

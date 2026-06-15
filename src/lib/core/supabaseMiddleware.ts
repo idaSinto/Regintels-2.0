@@ -18,6 +18,8 @@ const protectedPrefixes = [
   '/api/impact-keywords',
   '/api/run-pipeline',
   '/api/send-newsletter',
+  '/api/sharepoint/product-impact',
+  '/api/staff-users',
 ];
 
 function isProtectedPath(pathname: string) {

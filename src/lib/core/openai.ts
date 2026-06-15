@@ -22,15 +22,12 @@ export async function askOpenAI(messages: ChatMessage[]) {
   }
 
   try {
-    console.log('Sending request to Claude with messages:', messages);
-
     const response = await llm.chat.completions.create({
       model: modelName,
       messages,
     });
 
     const content = response.choices?.[0]?.message?.content ?? '';
-    console.log('Claude response:', content); // logging response
     return content;
   } catch (err) {
     console.error('Claude request failed:', err);

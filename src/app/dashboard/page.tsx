@@ -210,7 +210,7 @@ export default function DashboardPage() {
   const runPipeline = async () => {
     setPipelineRunning(true);
     try {
-      const res = await fetch('/api/run-pipeline');
+      const res = await fetch('/api/run-pipeline', { method: 'POST' });
       const payload = await parseJsonResponse<Record<string, unknown> | ApiErrorResponse>(res);
 
       if (res.status === 401) {

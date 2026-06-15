@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { supabase } from '@/lib/core/database';
+
+const UpdateRegulationSchema = z.object({
+  name: z.string().min(1).max(255),
+  authority: z.string().min(1).max(255).optional(),
+  search_queries: z.array(z.string().max(500)).max(50).optional(),
+  primary_sources: z.array(z.string().url().max(2000)).max(20).nullable().optional(),
+});
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const id = parseInt(params.id);
+  if (Number.isNaN(id)) {
+    return NextResponse.json({ error: 'Invalid regulation ID.' }, { status: 400 });
+  }
   const body = await req.json();
-  const { name, authority, search_queries, primary_sources } = body;
+  const parsed = UpdateRegulationSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+  const { name, authority, search_queries, primary_sources } = parsed.data;
 
   // Update regulation
   const { error: regError } = await supabase
@@ -32,6 +47,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const id = parseInt(params.id);
+  if (Number.isNaN(id)) {
+    return NextResponse.json({ error: 'Invalid regulation ID.' }, { status: 400 });
+  }
 
   const { error } = await supabase
     .from('regulations')
