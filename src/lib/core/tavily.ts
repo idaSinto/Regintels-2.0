@@ -14,9 +14,17 @@ export async function tavilySearch(
   query: string,
   opts: Record<string, any> = {}
 ): Promise<TavilyArticle[]> {
-  const size = opts.size ?? 20;
-
-  const res = await tavily().search(query, { max_results: size }); 
+  const size = opts.size ?? opts.maxResults ?? 20;
+  const res = await tavily().search(query, {
+    maxResults: size,
+    searchDepth: opts.searchDepth ?? 'advanced',
+    topic: opts.topic ?? 'news',
+    days: opts.days,
+    includeDomains: opts.includeDomains,
+    excludeDomains: opts.excludeDomains,
+    includeAnswer: opts.includeAnswer ?? false,
+    includeRawContent: opts.includeRawContent ?? 'text'
+  }); 
 
   if (!res?.results || !Array.isArray(res.results)) return [];
 
@@ -29,9 +37,9 @@ export async function tavilySearch(
     return {
       url: r.url,
       title: r.title ?? null,
-      snippet: r.content ?? null,
-      content: r.content ?? null,
-      published_date: r.published_date ?? null,
+      snippet: r.content ?? r.rawContent ?? null,
+      content: r.rawContent ?? r.content ?? null,
+      published_date: r.publishedDate ?? r.published_date ?? null,
       source: hostname,
       domain: hostname,
     };

@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources, 
+        primary_sources,
         secondary_sources
       )
     `)
@@ -69,9 +69,9 @@ export async function GET(req: Request) {
         id: String(reg.id),
         regulationName: reg.name,
         searchQueries,
-        primarySources,
-        secondarySources,
         primarySourceUrl: primarySources[0] ?? undefined,
+        primarySources,
+        secondarySources
       };
 
       try {
@@ -79,7 +79,7 @@ export async function GET(req: Request) {
         const res = await runRegulationPipeline({
           config,
           synthesisPromptBuilder: buildSynthesisPrompt,
-          maxSearchPerQuery: 20,
+          maxSearchPerQuery: 5,
         });
         results.push({ regulation: reg.name, result: res });
 

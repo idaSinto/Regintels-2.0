@@ -20,12 +20,11 @@ type Article = {
 type VerifiedUpdate = {
   id: number;
   regulation: string;
-  regulation_name: string;
+  regulation_name: string | null;
   deduced_title: string;
   summary_text: string;
   impact_level: 'high' | 'medium' | 'low';
   related_articles: Article[];
-  deduced_published_date: string | null;
   created_at: string;
 };
 
@@ -69,25 +68,6 @@ const getConfidence = (count: number) => {
     textColor: 'text-rose-100',
     icon: <AlertCircle className="h-4 w-4 inline mr-1" /> 
   };
-};
-
-/**
- * Formats a date string into UK format (DD/MM/YYYY)
- */
-const formatDate = (dateStr: string | null | undefined) => {
-  if (!dateStr) return 'No date available';
-  const direct = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (direct) {
-    return `${direct[3]}/${direct[2]}/${direct[1]}`;
-  }
-
-  const date = new Date(dateStr);
-  
-  if (isNaN(date.getTime())) return 'No date available';
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = date.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
 };
 
 /**
@@ -248,33 +228,30 @@ export default function DashboardPage() {
 
   // Calculate total article count
   const articleCount = updates.reduce((acc, u) => acc + (u.related_articles?.length || 0), 0);
+  const normalizedSearchQuery = searchQuery.toLowerCase();
 
   // --- FILTERING & SORTING LOGIC ---
   const filteredAndSortedUpdates = updates
     .filter(u =>
-      u.regulation_name
+      (u.regulation_name ?? '')
         .toLowerCase()
-        .includes(searchQuery.toLowerCase())
+        .includes(normalizedSearchQuery)
     )
     .sort((a, b) => {
       // Sort by Name
       if (sortKey === 'name') {
-        const nameA = a.regulation_name.toLowerCase();
-        const nameB = b.regulation_name.toLowerCase();
+        const nameA = (a.regulation_name ?? '').toLowerCase();
+        const nameB = (b.regulation_name ?? '').toLowerCase();
         return sortOrder === 'asc'
           ? nameA.localeCompare(nameB)
           : nameB.localeCompare(nameA);
       }
 
-      // Sort by Date
-      const dateA = a.deduced_published_date
-        ? new Date(a.deduced_published_date).getTime()
-        : 0;
-      const dateB = b.deduced_published_date
-        ? new Date(b.deduced_published_date).getTime()
-        : 0;
+      // Sort by latest card creation time
+      const timeA = new Date(a.created_at).getTime();
+      const timeB = new Date(b.created_at).getTime();
 
-      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
     });
 
   return (
@@ -483,13 +460,6 @@ export default function DashboardPage() {
                         <ChevronRight className="h-5 w-5 text-[var(--foreground)]/40 group-hover:text-[var(--accent)] transform group-hover:translate-x-1 transition-all" />
                       </div>
                       
-                      {update.deduced_published_date && (
-                        <div className="flex items-center text-[var(--foreground)]/50 text-xs mb-3">
-                          <span className="flex h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
-                          Updated: {formatDate(update.deduced_published_date)}
-                        </div>
-                      )}
-                      
                       <p className="text-[var(--foreground)]/80 text-sm mt-3 line-clamp-3 leading-relaxed">
                         {update.summary_text}
                       </p>
@@ -550,10 +520,6 @@ export default function DashboardPage() {
                   <span className={`px-4 py-2 rounded-full text-xs font-semibold ${impactColor(modalOpen.impact_level).textColor} ${impactColor(modalOpen.impact_level).color} flex items-center`}>
                     {impactColor(modalOpen.impact_level).icon} {capitalize(modalOpen.impact_level)} Impact
                   </span>
-                  <span className="text-[var(--foreground)]/60 text-sm flex items-center">
-                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 mr-2"></span>
-                    {formatDate(modalOpen.deduced_published_date)}
-                  </span>
                 </div>
               </div>
 
@@ -589,7 +555,6 @@ export default function DashboardPage() {
                               </span>
                               <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--foreground)]/60">
                                 <span>{article.source_domain || 'Unknown source'}</span>
-                                <span>Updated: {formatDate(article.published_at)}</span>
                               </span>
                             </span>
                             <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />

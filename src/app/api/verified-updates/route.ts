@@ -11,7 +11,6 @@ export async function GET() {
     .from('latest_verified_updates')
     .select(`
       regulation_id,
-      deduced_published_date,
       verified_updates:verified_update_id(*)
     `)
     // Sort so the newest regulations appear at the top

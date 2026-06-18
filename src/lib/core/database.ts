@@ -18,6 +18,7 @@ export type RegulationSearchProfile = {
   authority: string;
   search_queries: string[];
   primary_sources: string[] | null;
+  secondary_sources: string[] | null;
 };
 
 export type RegulationWithProfile = {
@@ -38,7 +39,8 @@ export async function getActiveRegulationsWithProfile(): Promise<RegulationWithP
       regulation_search_profiles (
         authority,
         search_queries,
-        primary_sources
+        primary_sources,
+        secondary_sources
       )
     `)
     .eq('is_active', true);
