@@ -54,7 +54,8 @@ type ImpactKeyword = {
 // ---------------------------------------------------------
 export async function scanAndStoreArticles(
   config: { id: string; searchQueries: string[]; primarySources?: string[]; secondarySources?: string[] },
-  maxPerQuery = 12
+  maxPerQuery = 5,
+  maxQueries = 3
 ): Promise<number[]> {
   console.log(`Scanning articles for config: ${config.id}`);
 
@@ -70,7 +71,10 @@ export async function scanAndStoreArticles(
   ];
   const seenUrls = new Set<string>();
 
-  for (const query of config.searchQueries) {
+  const queries = config.searchQueries.slice(0, maxQueries);
+  console.log(`Using ${queries.length} of ${config.searchQueries.length} search queries (maxQueries=${maxQueries})`);
+
+  for (const query of queries) {
     for (const scope of searchScopes) {
       try {
         const results = await tavilySearch(query, {
@@ -285,16 +289,18 @@ function sanitizePublishedDate(dateStr: string | null): string | null {
 export async function runRegulationPipeline({
   config,
   synthesisPromptBuilder = buildSynthesisPrompt,
-  maxSearchPerQuery = 5
+  maxSearchPerQuery = 3,
+  maxQueries = 3
 }: {
   config: RegConfig;
   synthesisPromptBuilder?: (article: TavilyArticle, config: RegConfig) => string;
   maxSearchPerQuery?: number;
+  maxQueries?: number;
 }) {
   console.log('Pipeline started for config:', config.id);
 
   // 1️⃣ Scan + store new articles
-  const insertedIds = await scanAndStoreArticles(config, maxSearchPerQuery);
+  const insertedIds = await scanAndStoreArticles(config, maxSearchPerQuery, maxQueries);
   if (!insertedIds.length) return { ok: true, consensus: false };
 
   // 2️⃣ Fetch newly inserted articles
