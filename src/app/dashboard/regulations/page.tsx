@@ -15,6 +15,7 @@ type Regulation = {
     authority: string;
     search_queries: string[];
     primary_sources?: string[] | null;
+    secondary_sources?: string[] | null;
   };
 };
 
@@ -24,13 +25,88 @@ type RegulationFormProps = {
   onSave: () => void;
 };
 
+const normalizeList = (values?: string[] | null) =>
+  Array.from(new Set((values ?? []).map(value => value.trim()).filter(Boolean)));
+
+function ChipField({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState('');
+
+  const addItem = () => {
+    const item = draft.trim();
+    if (!item) return;
+    onChange(Array.from(new Set([...items, item])));
+    setDraft('');
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">{label}</label>
+      <div className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 p-3">
+        <div className="flex flex-wrap gap-2">
+          {items.map(item => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/10 px-3 py-1.5 text-sm text-[var(--accent)]"
+            >
+              <span className="max-w-[220px] truncate">{item}</span>
+              <button
+                type="button"
+                onClick={() => onChange(items.filter(existing => existing !== item))}
+                className="text-[var(--accent)]/70 hover:text-[var(--accent)]"
+                aria-label={`Remove ${item}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addItem();
+              }
+            }}
+            placeholder={placeholder}
+            className="min-w-0 flex-1 rounded-lg border border-gray-300/70 dark:border-gray-600 bg-white/60 dark:bg-gray-900/40 px-3 py-2.5 text-sm text-[var(--foreground)] placeholder-[var(--foreground)]/40 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          />
+          <button
+            type="button"
+            onClick={addItem}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==========================================
 // FORM MODAL
 // ==========================================
 function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
   const [name, setName] = useState(regulation?.name || '');
   const [authority, setAuthority] = useState(regulation?.regulation_search_profiles?.authority || '');
-  const [queries, setQueries] = useState((regulation?.regulation_search_profiles?.search_queries || []).join('\n'));
+  const [queries, setQueries] = useState(normalizeList(regulation?.regulation_search_profiles?.search_queries));
+  const [primarySources, setPrimarySources] = useState(normalizeList(regulation?.regulation_search_profiles?.primary_sources));
+  const [secondarySources, setSecondarySources] = useState(normalizeList(regulation?.regulation_search_profiles?.secondary_sources));
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -40,14 +116,18 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
     try {
       const method = regulation ? 'PUT' : 'POST';
       const url = regulation ? `/api/regulations/${regulation.id}` : '/api/regulations';
-      const searchQueries = queries.split('\n').filter(q => q.trim());
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          regulation_search_profiles: { authority: authority.trim(), search_queries: searchQueries },
+          regulation_search_profiles: {
+            authority: authority.trim(),
+            search_queries: queries,
+            primary_sources: primarySources,
+            secondary_sources: secondarySources,
+          },
         }),
       });
 
@@ -63,12 +143,12 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
     >
       <motion.form
         initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] p-6 rounded-xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 w-full max-w-md"
+        className="bg-gradient-to-b from-[var(--background)] to-[var(--secondary)] p-5 rounded-xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 w-full max-w-md text-sm"
         onClick={e => e.stopPropagation()}
         onSubmit={(e) => { e.preventDefault(); handleSave(); }}
       >
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-[var(--foreground)]">
+          <h2 className="text-lg font-bold text-[var(--foreground)]">
             {regulation ? 'Edit Regulation' : 'Add Regulation'}
           </h2>
           <button
@@ -82,37 +162,45 @@ function RegulationForm({ regulation, onClose, onSave }: RegulationFormProps) {
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">Name *</label>
+            <label className="block text-xs font-medium mb-1 text-[var(--foreground)]/70">Name *</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g., GDPR"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-sm text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">Authority *</label>
+            <label className="block text-xs font-medium mb-1 text-[var(--foreground)]/70">Authority *</label>
             <input
               type="text"
               value={authority}
               onChange={e => setAuthority(e.target.value)}
               placeholder="e.g., European Commission"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-sm text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-[var(--foreground)]/70">Search Queries</label>
-            <textarea
-              value={queries}
-              onChange={e => setQueries(e.target.value)}
-              rows={4}
-              placeholder="Enter search queries..."
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-            />
-          </div>
+          <ChipField
+            label="Search Queries"
+            items={queries}
+            onChange={setQueries}
+            placeholder="Type a search query and press Enter"
+          />
+          <ChipField
+            label="Primary Source Domains"
+            items={primarySources}
+            onChange={setPrimarySources}
+            placeholder="Type a domain and press Enter"
+          />
+          <ChipField
+            label="Secondary Source Domains"
+            items={secondarySources}
+            onChange={setSecondarySources}
+            placeholder="Type a backup domain and press Enter"
+          />
         </div>
 
         <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
@@ -183,6 +271,10 @@ export default function RegulationsPage() {
 
   const handleAdd = () => { setEditingReg(null); setModalOpen(true); };
   const handleEdit = (reg: Regulation) => { setEditingReg(reg); setModalOpen(true); };
+  const handleReset = () => {
+    setSearchTerm('');
+    setSortBy('name');
+  };
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : 'Never';
 
@@ -275,6 +367,14 @@ export default function RegulationsPage() {
                 <option value="last_scanned_at">Last Scanned</option>
               </select>
             </div>
+
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
@@ -402,7 +502,7 @@ export default function RegulationsPage() {
           title="Back to top"
         >
           <ArrowUp className="h-4 w-4" />
-          Scoll Up
+          Scroll Up
         </button>
       )}
 
