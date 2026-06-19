@@ -40,7 +40,7 @@ const navItems: NavItem[] = [
     href: '/dashboard/regulations',
     label: 'Manage Regulations',
     shortLabel: 'Regulations',
-    description: 'Setup for each regulation',
+    description: 'Manage regulation profiles, sources, and search rules',
     icon: Sparkles,
   },
   {
@@ -70,8 +70,8 @@ function isActivePath(pathname: string, href: string) {
 function getPageCopy(pathname: string) {
   if (pathname.startsWith('/dashboard/regulations')) {
     return {
-      title: 'GHS Scan Modules',
-      subtitle: 'Clickable module management for scan setup, source control, and monitoring status.',
+      title: 'Manage Regulations',
+      subtitle: 'Configure search profiles, source domains, and monitoring settings for each regulation.',
     };
   }
 
@@ -200,7 +200,7 @@ export default function AppShell({ children }: AppShellProps) {
                   href="/dashboard/regulations"
                   className="hidden rounded-xl border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/15 md:inline-flex"
                 >
-                  Open Modules
+                  Open Regulations
                 </Link>
                 <div className="hidden xl:block">
                   <LogoutButton />
