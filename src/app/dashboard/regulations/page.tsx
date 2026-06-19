@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Plus, Trash2, Edit2, Globe, Calendar, Search } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Globe, Calendar, Search, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 
 // ==========================================
@@ -155,6 +155,7 @@ export default function RegulationsPage() {
   const [editingReg, setEditingReg] = useState<Regulation | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'last_scanned_at'>('name');
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const fetchRegs = async () => {
     setLoading(true);
@@ -165,6 +166,14 @@ export default function RegulationsPage() {
   };
 
   useEffect(() => { fetchRegs(); }, []);
+
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure?')) return;
@@ -348,17 +357,25 @@ export default function RegulationsPage() {
                     </div>
                     
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {reg.regulation_search_profiles?.search_queries.slice(0, 3).map((query, idx) => (
-                        <span 
-                          key={idx}
-                          className="px-2 py-1 rounded text-xs bg-[var(--accent)]/10 text-[var(--accent)]"
-                        >
-                          {query}
-                        </span>
-                      ))}
-                      {reg.regulation_search_profiles?.search_queries.length && reg.regulation_search_profiles.search_queries.length > 3 && (
+                      {reg.regulation_search_profiles?.search_queries.length ? (
+                        <>
+                          {reg.regulation_search_profiles.search_queries.slice(0, 3).map((query, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 rounded text-xs bg-[var(--accent)]/10 text-[var(--accent)]"
+                            >
+                              {query}
+                            </span>
+                          ))}
+                          {reg.regulation_search_profiles.search_queries.length > 3 && (
+                            <span className="px-2 py-1 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                              +{reg.regulation_search_profiles.search_queries.length - 3} more
+                            </span>
+                          )}
+                        </>
+                      ) : (
                         <span className="px-2 py-1 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                          +{reg.regulation_search_profiles.search_queries.length - 3} more
+                          No search queries
                         </span>
                       )}
                     </div>
@@ -375,6 +392,19 @@ export default function RegulationsPage() {
           </motion.div>
         )}
       </div>
+
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-105 active:scale-95"
+          aria-label="Back to top"
+          title="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+          Scoll Up
+        </button>
+      )}
 
       <AnimatePresence>
         {modalOpen && (

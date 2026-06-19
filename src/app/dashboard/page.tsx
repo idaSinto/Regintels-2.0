@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter, Eye } from 'lucide-react';
+import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter, Eye, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -98,6 +98,16 @@ const impactColor = (level: string) => {
   }
 };
 
+const getDisplayDomain = (article: Article) => {
+  if (article.source_domain) return article.source_domain;
+
+  try {
+    return new URL(article.url).hostname;
+  } catch {
+    return article.url;
+  }
+};
+
 // ==========================================
 // 3. ANIMATION SETTINGS (Framer Motion)
 // ==========================================
@@ -140,6 +150,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<'date' | 'name'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const router = useRouter();
 
   // --- API FUNCTIONS ---
@@ -223,6 +234,14 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchUpdates();
   }, [fetchUpdates]);
+
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -482,6 +501,19 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-105 active:scale-95"
+          aria-label="Back to top"
+          title="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+          Scroll Up
+        </button>
+      )}
+
       {/* DETAIL MODAL POPUP */}
       <AnimatePresence>
         {modalOpen && (
@@ -554,7 +586,7 @@ export default function DashboardPage() {
                                 {article.title || article.url}
                               </span>
                               <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--foreground)]/60">
-                                <span>{article.source_domain || 'Unknown source'}</span>
+                                <span className="max-w-[420px] truncate">{getDisplayDomain(article)}</span>
                               </span>
                             </span>
                             <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
