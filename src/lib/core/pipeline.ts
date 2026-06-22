@@ -11,7 +11,7 @@ dayjs.extend(isSameOrBefore);
 // Internal Modules
 import { buildSynthesisPrompt } from "@/lib/core/processors";
 import { supabase } from './database';
-import { askOpenAI } from './openai';
+import { askLLM } from './openai';
 import type { ArticleSummary } from '@/lib/core/semantic';
 import { semanticGroupSummaries } from '@/lib/core/semantic';
 import { tavilySearch, TavilyArticle as TavilyArticleCore } from './tavily';
@@ -403,7 +403,7 @@ export async function synthesizeArticles(
     const prompt = promptBuilder(article, config);
 
     try {
-      const response = await askOpenAI([
+      const response = await askLLM([
         { role: 'system', content: 'You are an expert regulatory analyst.' },
         { role: 'user', content: prompt }
       ]);

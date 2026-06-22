@@ -5,35 +5,107 @@ type ChatMessage = {
   content: string;
 };
 
-const modelName = process.env.CLAUDE_MODEL ?? 'claude-opus-4-6';
-const anthropicApiKey = process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY;
+type ModelConfig = {
+  label: string;
+  model: string;
+  apiKey: string;
+  baseURL: string;
+};
 
-// Compatible endpoint for Anthropic's OpenAI, which can use for both OpenAI and Anthropic models. 
-// https://platform.claude.com/docs/en/api/openai-sdk
+function createModelConfig(prefix: string, defaults: Partial<ModelConfig> = {}): ModelConfig | null {
+  const model = process.env[`${prefix}_MODEL`] ?? defaults.model;
+  const baseURL = process.env[`${prefix}_BASE_URL`] ?? defaults.baseURL;
+  const apiKey = process.env[`${prefix}_API_KEY`] ?? defaults.apiKey;
 
-const llm = new OpenAI({
-  apiKey: anthropicApiKey,
-  baseURL: process.env.ANTROPIC_BASE_URL ?? 'https://api.anthropic.com/v1/',
+  if (!model || !baseURL || !apiKey) return null;
+
+  return {
+    label: prefix.toLowerCase(),
+    model,
+    baseURL,
+    apiKey,
+  };
+}
+
+const primaryConfig = createModelConfig('LLM', {
+  model: 'qwen3:32b',
+  apiKey: 'ollama',
+  baseURL: 'http://localhost:11434/v1',
 });
 
-export async function askOpenAI(messages: ChatMessage[]) {
-  if (!anthropicApiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not set');
+const fallbackConfig = createModelConfig('LLM_FALLBACK');
+
+function createClient(config: ModelConfig) {
+  return new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseURL,
+  });
+}
+
+async function completeWithConfig(config: ModelConfig, messages: ChatMessage[]) {
+  const llm = createClient(config);
+
+  console.log(`Sending request to ${config.label}:${config.model} via ${config.baseURL}`, messages);
+
+  const response = await llm.chat.completions.create({
+    model: config.model,
+    messages,
+  });
+
+  const content = response.choices?.[0]?.message?.content ?? '';
+  console.log(`${config.label}:${config.model} response:`, content);
+  return content;
+}
+
+export async function askLLM(messages: ChatMessage[]) {
+  if (!primaryConfig) {
+    throw new Error('LLM configuration is incomplete');
   }
 
   try {
-    console.log('Sending request to Claude with messages:', messages);
-
-    const response = await llm.chat.completions.create({
-      model: modelName,
-      messages,
-    });
-
-    const content = response.choices?.[0]?.message?.content ?? '';
-    console.log('Claude response:', content); // logging response
-    return content;
+    return await completeWithConfig(primaryConfig, messages);
   } catch (err) {
-    console.error('Claude request failed:', err);
-    throw err;
+    console.error(`${primaryConfig.label}:${primaryConfig.model} request failed:`, err);
+
+    if (!fallbackConfig) {
+      throw err;
+    }
+
+    console.warn(
+      `Falling back to ${fallbackConfig.label}:${fallbackConfig.model} via ${fallbackConfig.baseURL}`
+    );
+
+    return await completeWithConfig(fallbackConfig, messages);
   }
+}
+
+export function getLLMConfigSummary() {
+  return {
+    primary: primaryConfig
+      ? {
+          model: primaryConfig.model,
+          baseURL: primaryConfig.baseURL,
+          label: primaryConfig.label,
+        }
+      : null,
+    fallback: fallbackConfig
+      ? {
+          model: fallbackConfig.model,
+          baseURL: fallbackConfig.baseURL,
+          label: fallbackConfig.label,
+        }
+      : null,
+  };
+}
+
+export function hasFallbackLLM() {
+  return Boolean(fallbackConfig);
+}
+
+export function getPrimaryLLMConfig() {
+  return primaryConfig;
+}
+
+export function getFallbackLLMConfig() {
+  return fallbackConfig;
 }
