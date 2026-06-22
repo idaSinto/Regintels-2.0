@@ -1,19 +1,8 @@
-import { redirect } from 'next/navigation';
 import { ShieldCheck, Activity, Layers } from 'lucide-react';
 
 import AuthAccessPanel from '@/components/auth/AuthAccessPanel';
-import { createSupabaseServerClient } from '@/lib/core/supabaseServer';
 
 export default async function Home() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect('/dashboard');
-  }
-
   return (
     <div className="relative flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(126,34,206,0.22),_transparent_32%),linear-gradient(145deg,#020617_0%,#0f172a_48%,#111827_100%)]">
       <div className="absolute inset-0 pointer-events-none">

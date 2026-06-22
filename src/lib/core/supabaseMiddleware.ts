@@ -37,94 +37,107 @@ function clearAuthCookies(request: NextRequest, response: NextResponse) {
 }
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({
-    request,
-  });
+  try {
+    let response = NextResponse.next({
+      request,
+    });
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+
+          response = NextResponse.next({
+            request,
+          });
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+    });
 
-        response = NextResponse.next({
-          request,
-        });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
-        });
-      },
-    },
-  });
+    const { pathname, search } = request.nextUrl;
+    const protectedPath = isProtectedPath(pathname);
+    const startedAtCookie = request.cookies.get(appSessionStartedAtCookie)?.value;
+    const lastSeenAtCookie = request.cookies.get(appSessionLastSeenAtCookie)?.value;
+    const startedAt = startedAtCookie ? Number(startedAtCookie) : NaN;
+    const lastSeenAt = lastSeenAtCookie ? Number(lastSeenAtCookie) : NaN;
+    const sessionExpired = Number.isFinite(startedAt) && Date.now() - startedAt > appSessionMaxAgeMs;
+    const idleExpired = Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt > appSessionIdleTimeoutMs;
+    const sessionInvalid = !startedAtCookie || !lastSeenAtCookie || sessionExpired || idleExpired;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    if (!user && protectedPath) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
 
-  const { pathname, search } = request.nextUrl;
-  const protectedPath = isProtectedPath(pathname);
-  const startedAtCookie = request.cookies.get(appSessionStartedAtCookie)?.value;
-  const lastSeenAtCookie = request.cookies.get(appSessionLastSeenAtCookie)?.value;
-  const startedAt = startedAtCookie ? Number(startedAtCookie) : NaN;
-  const lastSeenAt = lastSeenAtCookie ? Number(lastSeenAtCookie) : NaN;
-  const sessionExpired = Number.isFinite(startedAt) && Date.now() - startedAt > appSessionMaxAgeMs;
-  const idleExpired = Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt > appSessionIdleTimeoutMs;
-  const sessionInvalid = !startedAtCookie || !lastSeenAtCookie || sessionExpired || idleExpired;
-
-  if (!user && protectedPath) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const homeUrl = request.nextUrl.clone();
+      homeUrl.pathname = '/';
+      homeUrl.searchParams.set('next', `${pathname}${search}`);
+      return NextResponse.redirect(homeUrl);
     }
 
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = '/';
-    homeUrl.searchParams.set('next', `${pathname}${search}`);
-    return NextResponse.redirect(homeUrl);
-  }
+    if (user && protectedPath && sessionInvalid) {
+      if (pathname.startsWith('/api/')) {
+        const expiredResponse = NextResponse.json(
+          { error: 'Session expired. Please sign in again.' },
+          { status: 401 },
+        );
+        clearAuthCookies(request, expiredResponse);
+        return expiredResponse;
+      }
 
-  if (user && protectedPath && sessionInvalid) {
-    if (pathname.startsWith('/api/')) {
-      const expiredResponse = NextResponse.json(
-        { error: 'Session expired. Please sign in again.' },
-        { status: 401 },
-      );
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/';
+      loginUrl.searchParams.set('next', `${pathname}${search}`);
+      loginUrl.searchParams.set('reason', 'expired');
+
+      const expiredResponse = NextResponse.redirect(loginUrl);
       clearAuthCookies(request, expiredResponse);
       return expiredResponse;
     }
 
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/';
-    loginUrl.searchParams.set('next', `${pathname}${search}`);
-    loginUrl.searchParams.set('reason', 'expired');
+    if (user && (pathname === '/login' || pathname === '/signup') && !sessionInvalid) {
+      const dashboardUrl = request.nextUrl.clone();
+      dashboardUrl.pathname = '/dashboard';
+      dashboardUrl.search = '';
+      return NextResponse.redirect(dashboardUrl);
+    }
 
-    const expiredResponse = NextResponse.redirect(loginUrl);
-    clearAuthCookies(request, expiredResponse);
-    return expiredResponse;
+    if (!user) {
+      clearAuthCookies(request, response);
+    }
+
+    if (user && !sessionInvalid) {
+      response.cookies.set(appSessionLastSeenAtCookie, String(Date.now()), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: appSessionIdleTimeoutMinutes * 60,
+      });
+    }
+
+    return response;
+  } catch (err) {
+    console.error('Session middleware failed:', err);
+
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Authentication middleware failed.' }, { status: 500 });
+    }
+
+    const fallbackUrl = request.nextUrl.clone();
+    fallbackUrl.pathname = '/';
+    fallbackUrl.searchParams.set('reason', 'auth_error');
+    return NextResponse.redirect(fallbackUrl);
   }
-
-  if (user && (pathname === '/login' || pathname === '/signup') && !sessionInvalid) {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = '/dashboard';
-    dashboardUrl.search = '';
-    return NextResponse.redirect(dashboardUrl);
-  }
-
-  if (!user) {
-    clearAuthCookies(request, response);
-  }
-
-  if (user && !sessionInvalid) {
-    response.cookies.set(appSessionLastSeenAtCookie, String(Date.now()), {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: appSessionIdleTimeoutMinutes * 60,
-    });
-  }
-
-  return response;
 }
