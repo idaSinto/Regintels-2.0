@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter, Eye, ArrowUp } from 'lucide-react';
+import { ArrowRight, X, AlertCircle, CheckCircle, Zap, RefreshCw, ExternalLink, ChevronRight, Search, Filter, Eye, ArrowUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -106,6 +106,13 @@ const getDisplayDomain = (article: Article) => {
   } catch {
     return article.url;
   }
+};
+
+const SOCIAL_DOMAINS = ['instagram.com', 'www.instagram.com', 'facebook.com', 'www.facebook.com', 'youtube.com', 'www.youtube.com', 'youtu.be', 'm.youtube.com'];
+
+const isSocialArticle = (article: Article) => {
+  const domain = getDisplayDomain(article).toLowerCase();
+  return SOCIAL_DOMAINS.some(socialDomain => domain === socialDomain || domain.endsWith(`.${socialDomain}`) || domain.includes(socialDomain));
 };
 
 // ==========================================
@@ -248,6 +255,12 @@ export default function DashboardPage() {
   // Calculate total article count
   const articleCount = updates.reduce((acc, u) => acc + (u.related_articles?.length || 0), 0);
   const normalizedSearchQuery = searchQuery.toLowerCase();
+  const filteredModalRelatedArticles = (modalOpen?.related_articles ?? []).filter(article => !isSocialArticle(article));
+  const handleReset = () => {
+    setSearchQuery('');
+    setSortKey('date');
+    setSortOrder('desc');
+  };
 
   // --- FILTERING & SORTING LOGIC ---
   const filteredAndSortedUpdates = updates
@@ -367,51 +380,73 @@ export default function DashboardPage() {
         </div>
 
         {/* Search & Filter Controls */}
-        <div className="bg-white/60 dark:bg-gray-800/60 rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <div className="flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50">
+        <div className="bg-white/60 dark:bg-gray-800/60 rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-3 md:p-4 mb-6">
+          <div className="flex flex-col xl:flex-row gap-2 xl:gap-3 xl:items-stretch">
+            <div className="flex min-h-10 flex-1 items-center gap-2 rounded-xl border border-gray-300/80 dark:border-gray-600 bg-white/90 px-3.5 py-2.5 shadow-sm dark:bg-gray-900/75">
               <Search className="h-4 w-4 text-[var(--foreground)]/60" />
               <input
                 type="text"
                 placeholder="Search by regulation name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent text-[var(--foreground)] focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] placeholder-[var(--foreground)]/40 focus:outline-none"
               />
             </div>
-            
-            <div className="flex gap-2">
-              <select
-                aria-label="Sort updates by"
-                title="Sort updates by"
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as 'date' | 'name')}
-                className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-              >
-                <option value="date">Sort by Date</option>
-                <option value="name">Sort by Regulation Name</option>
-              </select>
 
-              <select
-                aria-label="Sort order"
-                title="Sort order"
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-              >
-                <option value="desc">Descending</option>
-                <option value="asc">Ascending</option>
-              </select>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex min-h-10 items-center gap-2 rounded-xl border border-gray-300/80 dark:border-gray-600 bg-white/90 px-3.5 py-2.5 shadow-sm dark:bg-gray-900/75">
+                <label className="text-sm font-medium whitespace-nowrap text-[var(--foreground)]/70">Sort by</label>
+                <div className="relative">
+                  <select
+                    aria-label="Sort updates by"
+                    title="Sort updates by"
+                    value={sortKey}
+                    onChange={(e) => setSortKey(e.target.value as 'date' | 'name')}
+                    className="min-w-[190px] appearance-none rounded-lg border border-gray-300/80 bg-white px-3.5 py-2 pr-10 text-sm font-semibold text-[var(--foreground)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] dark:border-gray-500 dark:bg-gray-900 dark:text-[var(--foreground)]"
+                  >
+                    <option value="date">Sort by Date</option>
+                    <option value="name">Sort by Regulation Name</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--foreground)]/50" />
+                </div>
+              </div>
+
+              <div className="flex min-h-10 items-center gap-2 rounded-xl border border-gray-300/80 dark:border-gray-600 bg-white/90 px-3.5 py-2.5 shadow-sm dark:bg-gray-900/75">
+                <label className="text-sm font-medium whitespace-nowrap text-[var(--foreground)]/70">Order</label>
+                <div className="relative">
+                  <select
+                    aria-label="Sort order"
+                    title="Sort order"
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                    className="min-w-[150px] appearance-none rounded-lg border border-gray-300/80 bg-white px-3.5 py-2 pr-10 text-sm font-semibold text-[var(--foreground)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] dark:border-gray-500 dark:bg-gray-900 dark:text-[var(--foreground)]"
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--foreground)]/50" />
+                </div>
+              </div>
             </div>
 
-            <button
-              onClick={() => fetchUpdates(true)}
-              disabled={refreshing}
-              className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 text-[var(--foreground)] hover:bg-white/50 dark:hover:bg-gray-800/50 flex items-center gap-2 transition-all"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:bg-white dark:border-gray-600 dark:bg-gray-900/75 dark:hover:bg-gray-900"
+              >
+                Reset
+              </button>
+
+              <button
+                onClick={() => fetchUpdates(true)}
+                disabled={refreshing}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-300/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:bg-white dark:border-gray-600 dark:bg-gray-900/75 dark:hover:bg-gray-900"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
 
@@ -568,11 +603,11 @@ export default function DashboardPage() {
 
                 <section>
                   <h3 className="text-lg font-semibold mb-4 text-[var(--foreground)]">
-                    Related Articles ({modalOpen.related_articles?.length || 0})
+                    Related Articles ({filteredModalRelatedArticles.length})
                   </h3>
-                  {modalOpen.related_articles?.length > 0 ? (
+                  {filteredModalRelatedArticles.length > 0 ? (
                     <div className="space-y-3">
-                      {modalOpen.related_articles.map((article) => {
+                      {filteredModalRelatedArticles.map((article) => {
                         return (
                           <a
                             key={article.id}

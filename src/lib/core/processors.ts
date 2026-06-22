@@ -1,10 +1,20 @@
 import type { TavilyArticle } from "@/lib/core/pipeline";
 
 export const buildSynthesisPrompt = (article: TavilyArticle, regulation: any) => {
+  const searchQueries = Array.isArray(regulation.searchQueries) ? regulation.searchQueries : [];
+  const triggerWords = Array.isArray(regulation.triggerWords) ? regulation.triggerWords : [];
+  const excludedTerms = Array.isArray(regulation.excludedTerms) ? regulation.excludedTerms : [];
+  const regulationLabel = regulation.regulationName ?? regulation.regulation_name ?? regulation.id ?? 'unknown regulation';
+
   return `
 You are an expert regulatory intelligence processor. Extract structured information from the news article about a regulation.
 
-Regulation being analyzed: "${regulation.regulation_name}"
+Regulation being analyzed: "${regulationLabel}"
+
+Search intent:
+- Search queries: ${searchQueries.length ? searchQueries.join(', ') : 'N/A'}
+- Trigger words: ${triggerWords.length ? triggerWords.join(', ') : 'N/A'}
+- Excluded terms: ${excludedTerms.length ? excludedTerms.join(', ') : 'N/A'}
 
 Article Text:
 --- START ARTICLE TEXT ---
@@ -23,6 +33,7 @@ Task:
    - Timeline/schedule changes ("timeline")
    - Unknown → "unspecified"
 4. **update_summary**: Write 1-2 concise sentences describing the change. **Start the sentence with "On [Month] [Year], ..."**, using the month/year of the change (from event_month if available, otherwise the article's published date). Use neutral, standardized phrasing so semantically similar updates across articles can be matched. Avoid adjectives, opinions, or citations.
+5. If the article is not clearly about the search intent above, return the closest matching regulatory update only if the article explicitly supports it. Do not substitute adjacent frameworks or a more general regulation just because they are related.
 
 Constraints:
 * Do NOT include evidence, verification, justification, or citations.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Plus, Trash2, Edit2, Globe, Calendar, Search, ArrowUp } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Globe, Calendar, Search, ArrowUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 
 // ==========================================
@@ -341,40 +341,45 @@ export default function RegulationsPage() {
         </div>
 
         {/* Search & Sort */}
-        <div className="bg-white/60 dark:bg-gray-800/60 rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-6 mb-8">
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
-            <div className="flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50">
+        <div className="bg-white/60 dark:bg-gray-800/60 rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-3 md:p-4 mb-6">
+          <div className="flex flex-col xl:flex-row gap-2 xl:gap-3 xl:items-stretch">
+            <div className="flex min-h-10 flex-1 items-center gap-2 rounded-xl border border-gray-300/80 dark:border-gray-600 bg-white/90 px-3.5 py-2.5 shadow-sm dark:bg-gray-900/75">
               <Search className="h-4 w-4 text-[var(--foreground)]/60" />
               <input
                 type="text"
                 placeholder="Search by name or authority..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="flex-1 bg-transparent text-[var(--foreground)] focus:outline-none placeholder-[var(--foreground)]/40"
+                className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] placeholder-[var(--foreground)]/40 focus:outline-none"
               />
             </div>
-            
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50">
-              <label className="text-sm font-medium text-[var(--foreground)]/70">Sort by:</label>
-              <select
-                id="sort-select"
-                aria-label="sort regulations"
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value as 'name' | 'last_scanned_at')}
-                className="ml-2 bg-transparent text-[var(--foreground)] focus:outline-none"
-              >
-                <option value="name">Name</option>
-                <option value="last_scanned_at">Last Scanned</option>
-              </select>
-            </div>
 
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 text-[var(--foreground)] hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all"
-            >
-              Reset
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex min-h-10 items-center gap-2 rounded-xl border border-gray-300/80 dark:border-gray-600 bg-white/90 px-3.5 py-2.5 shadow-sm dark:bg-gray-900/75">
+                <label className="text-sm font-medium whitespace-nowrap text-[var(--foreground)]/70">Sort by</label>
+                <div className="relative">
+                  <select
+                    id="sort-select"
+                    aria-label="sort regulations"
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value as 'name' | 'last_scanned_at')}
+                    className="min-w-[180px] appearance-none rounded-lg border border-gray-300/80 bg-white px-3.5 py-2 text-sm font-semibold text-[var(--foreground)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] dark:border-gray-500 dark:bg-gray-900 dark:text-[var(--foreground)]"
+                  >
+                    <option value="name">Name</option>
+                    <option value="last_scanned_at">Last Scanned</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--foreground)]/50" />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300/80 bg-white/90 px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:bg-white dark:border-gray-600 dark:bg-gray-900/75 dark:hover:bg-gray-900"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
 
@@ -482,11 +487,6 @@ export default function RegulationsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
-                  <div className="text-xs text-[var(--foreground)]/60">
-                    ID: REG-{reg.id.toString().padStart(3, '0')}
-                  </div>
-                </div>
               </motion.div>
             ))}
           </motion.div>

@@ -24,12 +24,14 @@ export type TavilyArticle = TavilyArticleCore & {
 
 export type RegConfig = {
   id: string;
+  regulationName?: string;
   searchQueries: string[];
   primarySourceUrl?: string;
   primarySources?: string[];
   secondarySources?: string[];
   allowedDomains?: string[];
   triggerWords?: string[];
+  excludedTerms?: string[];
   maxArticles?: number;
 };
 
@@ -49,12 +51,155 @@ type ImpactKeyword = {
   level: 'high' | 'medium' | 'low';
 };
 
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'are', 'was', 'were', 'has', 'have',
+  'been', 'into', 'over', 'under', 'about', 'after', 'before', 'between', 'within', 'without',
+  'list', 'update', 'updates', 'regulation', 'regulatory', 'guidance', 'news', 'article', 'report',
+  'rule', 'rules', 'new', 'latest', 'echa', 'european', 'commission'
+]);
+
+function normalizeTerms(terms: string[] | undefined): string[] {
+  return Array.from(
+    new Set(
+      (terms ?? [])
+        .map(term => term.trim().toLowerCase())
+        .filter(Boolean)
+        .filter(term => term.length >= 3)
+    )
+  );
+}
+
+function deriveTriggerWordsFromQueries(searchQueries: string[]): string[] {
+  const derived = new Set<string>();
+
+  for (const query of searchQueries) {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) continue;
+
+    derived.add(normalized);
+
+    const tokens = normalized
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .split(/\s+/)
+      .map(token => token.trim())
+      .filter(token => token.length >= 4 && !STOP_WORDS.has(token));
+
+    for (const token of tokens) {
+      derived.add(token);
+    }
+  }
+
+  return Array.from(derived);
+}
+
+function getArticleSearchBlob(article: TavilyArticle): string {
+  return [
+    article.title,
+    article.snippet,
+    article.content,
+    article.source,
+    article.domain,
+    article.url
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function buildRelevantTerms(config: RegConfig) {
+  const searchQueries = normalizeTerms(config.searchQueries);
+  const triggerWords = normalizeTerms(config.triggerWords);
+  const excludedTerms = normalizeTerms(config.excludedTerms);
+  const effectiveTriggers = triggerWords.length > 0 ? triggerWords : deriveTriggerWordsFromQueries(searchQueries);
+
+  return {
+    searchQueries,
+    triggerWords: effectiveTriggers,
+    excludedTerms
+  };
+}
+
+function isRelevantArticle(article: TavilyArticle, config: RegConfig): boolean {
+  const blob = getArticleSearchBlob(article);
+  const { searchQueries, triggerWords, excludedTerms } = buildRelevantTerms(config);
+  const queryText = searchQueries.join(' ');
+  const wantsCandidateList = queryText.includes('candidate list') || triggerWords.some(term => term.includes('candidate list') || term.includes('svhc'));
+
+  if (excludedTerms.some(term => blob.includes(term))) {
+    return false;
+  }
+
+  if (wantsCandidateList) {
+    return blob.includes('candidate list') || blob.includes('svhc');
+  }
+
+  const positiveTerms = [...triggerWords, ...searchQueries];
+  if (positiveTerms.length === 0) {
+    return true;
+  }
+
+  const exactMatches = positiveTerms.filter(term => blob.includes(term));
+  if (exactMatches.length > 0) {
+    return true;
+  }
+
+  const tokenHits = new Set(
+    positiveTerms
+      .flatMap(term => term.split(/\s+/))
+      .map(token => token.trim())
+      .filter(token => token.length >= 4 && !STOP_WORDS.has(token))
+      .filter(token => blob.includes(token))
+  );
+
+  return tokenHits.size >= 2;
+}
+
+function scoreArticleRelevance(article: TavilyArticle, config: RegConfig): number {
+  const blob = getArticleSearchBlob(article);
+  const { searchQueries, triggerWords, excludedTerms } = buildRelevantTerms(config);
+  const queryText = searchQueries.join(' ');
+  const wantsCandidateList = queryText.includes('candidate list') || triggerWords.some(term => term.includes('candidate list') || term.includes('svhc'));
+  let score = 0;
+
+  if (excludedTerms.some(term => blob.includes(term))) {
+    return -1000;
+  }
+
+  if (wantsCandidateList) {
+    if (blob.includes('candidate list')) score += 50;
+    if (blob.includes('svhc')) score += 20;
+    if (blob.includes('annex xvii')) score -= 10;
+    return score;
+  }
+
+  for (const term of searchQueries) {
+    if (blob.includes(term)) score += 6;
+  }
+
+  for (const term of triggerWords) {
+    if (blob.includes(term)) score += 4;
+  }
+
+  if (searchQueries.some(term => term.includes('candidate list')) && blob.includes('candidate list')) {
+    score += 12;
+  }
+
+  if (searchQueries.some(term => term.includes('annex xvii')) && blob.includes('annex xvii')) {
+    score += 12;
+  }
+
+  if (blob.includes('svhc')) score += 2;
+  if (blob.includes('echa')) score += 1;
+
+  return score;
+}
+
 // ---------------------------------------------------------
 // Scan and store articles
 // ---------------------------------------------------------
 export async function scanAndStoreArticles(
-  config: { id: string; searchQueries: string[]; primarySources?: string[]; secondarySources?: string[] },
-  maxPerQuery = 12
+  config: RegConfig,
+  maxPerQuery = 3
 ): Promise<number[]> {
   console.log(`Scanning articles for config: ${config.id}`);
 
@@ -63,15 +208,21 @@ export async function scanAndStoreArticles(
   const primarySources = Array.from(new Set((config.primarySources ?? []).map(s => s.trim()).filter(Boolean)));
   const secondarySources = Array.from(new Set((config.secondarySources ?? []).map(s => s.trim()).filter(Boolean)));
   const knownSources = Array.from(new Set([...primarySources, ...secondarySources]));
-  const searchScopes = [
+  const mainScopes = [
     { label: 'primary', includeDomains: primarySources, excludeDomains: [] as string[] },
-    { label: 'secondary', includeDomains: secondarySources, excludeDomains: [] as string[] },
+    { label: 'secondary', includeDomains: secondarySources, excludeDomains: [] as string[] }
+  ];
+  const supportScopes = [
     { label: 'unknown', includeDomains: [] as string[], excludeDomains: knownSources }
   ];
   const seenUrls = new Set<string>();
 
   for (const query of config.searchQueries) {
-    for (const scope of searchScopes) {
+    const hasMainScopes = mainScopes.some(scope => scope.includeDomains.length > 0);
+
+    for (const scope of mainScopes) {
+      if (aggregatedResults.length >= maxPerQuery) break;
+
       try {
         const results = await tavilySearch(query, {
           size: maxPerQuery,
@@ -104,6 +255,67 @@ export async function scanAndStoreArticles(
           }
 
           if (publishedDate && dayjs(publishedDate).isSameOrAfter(oneYearAgo)) {
+            if (!isRelevantArticle({ ...r, published_at: publishedDate }, config)) {
+              continue;
+            }
+
+            seenUrls.add(r.url);
+            aggregatedResults.push({ ...r, published_at: publishedDate });
+          }
+        }
+
+        console.log(
+          `Found ${aggregatedResults.length} recent articles for query "${query}" [${scope.label}] (raw: ${results.length})`
+        );
+      } catch (err) {
+        console.error('Tavily search error', query, scope.label, err);
+      }
+    }
+
+    if (aggregatedResults.length >= maxPerQuery || hasMainScopes) {
+      continue;
+    }
+
+    for (const scope of supportScopes) {
+      if (aggregatedResults.length >= maxPerQuery) break;
+
+      try {
+        const supportMaxResults = Math.max(2, Math.min(3, maxPerQuery));
+        const results = await tavilySearch(query, {
+          size: supportMaxResults,
+          maxResults: supportMaxResults,
+          includeAnswer: false,
+          includeRawContent: 'text',
+          searchDepth: 'basic',
+          topic: 'news',
+          includeDomains: scope.includeDomains.length ? scope.includeDomains : undefined,
+          excludeDomains: scope.excludeDomains.length ? scope.excludeDomains : undefined
+        });
+
+        for (const r of results || []) {
+          if (seenUrls.has(r.url)) continue;
+
+          let publishedDate = r.published_date;
+
+          if (!publishedDate && r.content) {
+            const htmlMatch = r.content.match(
+              /<meta[^>]*(?:name|property)=["'](?:article:published_time|date)["'][^>]*content=["']([^"']+)["']/i
+            );
+            if (htmlMatch) publishedDate = htmlMatch[1];
+          }
+
+          if (!publishedDate && r.content) {
+            const parsed = chrono.parse(r.content);
+            if (parsed.length > 0) {
+              publishedDate = parsed[0].date().toISOString();
+            }
+          }
+
+          if (publishedDate && dayjs(publishedDate).isSameOrAfter(oneYearAgo)) {
+            if (!isRelevantArticle({ ...r, published_at: publishedDate }, config)) {
+              continue;
+            }
+
             seenUrls.add(r.url);
             aggregatedResults.push({ ...r, published_at: publishedDate });
           }
@@ -183,6 +395,11 @@ export async function synthesizeArticles(
   const results: CandidateUpdate[] = [];
 
   for (const article of articles) {
+    if (!isRelevantArticle(article, config)) {
+      console.log('Skipping off-topic article before synthesis:', article.url);
+      continue;
+    }
+
     const prompt = promptBuilder(article, config);
 
     try {
@@ -285,26 +502,32 @@ function sanitizePublishedDate(dateStr: string | null): string | null {
 export async function runRegulationPipeline({
   config,
   synthesisPromptBuilder = buildSynthesisPrompt,
-  maxSearchPerQuery = 5
+  maxSearchPerQuery = 3,
+  skipScan = false
 }: {
   config: RegConfig;
   synthesisPromptBuilder?: (article: TavilyArticle, config: RegConfig) => string;
   maxSearchPerQuery?: number;
+  skipScan?: boolean;
 }) {
   console.log('Pipeline started for config:', config.id);
 
-  // 1️⃣ Scan + store new articles
-  const insertedIds = await scanAndStoreArticles(config, maxSearchPerQuery);
-  if (!insertedIds.length) return { ok: true, consensus: false };
+  // 1️⃣ Scan + store new articles unless scan is disabled
+  if (!skipScan) {
+    await scanAndStoreArticles(config, maxSearchPerQuery);
+  }
 
-  // 2️⃣ Fetch newly inserted articles
+  // 2️⃣ Fetch all unprocessed articles for this regulation
   const { data: rawRows } = await supabase
     .from('raw_articles')
     .select('*')
-    .in('id', insertedIds)
+    .eq('regulation', config.id)
+    .eq('is_processed', false)
     .order('published_at', { ascending: false });
 
-  const articles: TavilyArticle[] = rawRows ?? [];
+  const articles: TavilyArticle[] = (rawRows ?? [])
+    .slice()
+    .sort((a, b) => scoreArticleRelevance(b, config) - scoreArticleRelevance(a, config));
   if (articles.length === 0) return { ok: true, consensus: false };
 
   // 3️⃣ Synthesize articles
@@ -464,10 +687,17 @@ export async function runAllRegulationsPipeline() {
   }
 
   for (const regulation of regulations || []) {
-    for (const profile of regulation.regulation_search_profiles) {
+    const profiles = Array.isArray(regulation.regulation_search_profiles)
+      ? regulation.regulation_search_profiles
+      : regulation.regulation_search_profiles
+      ? [regulation.regulation_search_profiles]
+      : [];
+
+    for (const profile of profiles) {
       await runRegulationPipeline({
         config: {
-          id: regulation.id,
+          id: String(regulation.id),
+          regulationName: regulation.name,
           searchQueries: profile.search_queries,
           primarySources: profile.primary_sources ?? [],
           secondarySources: profile.secondary_sources ?? []

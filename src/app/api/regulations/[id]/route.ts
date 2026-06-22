@@ -5,7 +5,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id: idParam } = await params;
   const id = parseInt(idParam);
   const body = await req.json();
-  const { name, authority, search_queries, primary_sources } = body;
+  const { name, regulation_search_profiles } = body;
+  const { authority, search_queries, primary_sources, secondary_sources } = regulation_search_profiles || body;
 
   // Update regulation
   const { error: regError } = await supabase
@@ -15,15 +16,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (regError) return NextResponse.json({ error: regError }, { status: 500 });
 
-  // Update profile (ARRAY directly, not JSON string)
+  const profilePayload: Record<string, unknown> = {
+    regulation_id: id,
+    authority,
+    search_queries: Array.isArray(search_queries) ? search_queries : [],
+  };
+  if (Array.isArray(primary_sources)) profilePayload.primary_sources = primary_sources;
+  if (Array.isArray(secondary_sources)) profilePayload.secondary_sources = secondary_sources;
+
   const { error: profileError } = await supabase
     .from('regulation_search_profiles')
-    .update({
-      authority,
-      search_queries: Array.isArray(search_queries) ? search_queries : [],
-      primary_sources: Array.isArray(primary_sources) ? primary_sources : null
-    })
-    .eq('regulation_id', id);
+    .upsert(profilePayload, { onConflict: 'regulation_id' });
 
   if (profileError) return NextResponse.json({ error: profileError }, { status: 500 });
 

@@ -8,6 +8,7 @@ type Article = {
   id: number;
   url: string;
   title: string;
+  source_domain: string | null;
 };
 
 type LatestVerifiedRow = {
@@ -56,7 +57,7 @@ export async function GET() {
   const { data: articlesData, error: articlesError } = allRelatedIds.length > 0
     ? await supabase
         .from('raw_articles')
-        .select('id, url, title')
+        .select('id, url, title, source')
         .in('id', allRelatedIds)
     : { data: [] as Article[], error: null };
 
@@ -67,7 +68,7 @@ export async function GET() {
 
   // Create a Map for quick lookup of article details by ID
   const articlesMap = new Map<number, Article>(
-    articlesData?.map((a: Article) => [a.id, a]) ?? []
+    articlesData?.map((a: any) => [a.id, { ...a, source_domain: a.source ?? null }]) ?? []
   );
 
   // Combine updates with their full related article objects
