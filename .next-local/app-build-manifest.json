@@ -30,11 +30,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/latest-verified-updates/route.js"
-    ],
-    "/api/run-pipeline/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/run-pipeline/route.js"
     ]
   }
 }

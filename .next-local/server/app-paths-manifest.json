@@ -1,5 +1,6 @@
 {
-  "/api/run-pipeline/route": "app/api/run-pipeline/route.js",
+  "/api/auth/staff-login/route": "app/api/auth/staff-login/route.js",
+  "/api/latest-verified-updates/route": "app/api/latest-verified-updates/route.js",
   "/page": "app/page.js",
   "/dashboard/page": "app/dashboard/page.js"
 }
