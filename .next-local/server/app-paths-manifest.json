@@ -1,0 +1,5 @@
+{
+  "/api/run-pipeline/route": "app/api/run-pipeline/route.js",
+  "/page": "app/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
+}

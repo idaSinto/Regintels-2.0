@@ -1,15 +1,35 @@
 import type { TavilyArticle } from "@/lib/core/pipeline";
 
+export type RegulationFocus = 'svhc_candidate_list' | 'generic';
+
+export function inferRegulationFocus(regulation: any): RegulationFocus {
+  const label = String(regulation?.regulationName ?? regulation?.regulation_name ?? regulation?.id ?? '').toLowerCase();
+  const queries = Array.isArray(regulation?.searchQueries) ? regulation.searchQueries : [];
+  const queryBlob = queries.join(' ').toLowerCase();
+  const blob = `${label} ${queryBlob}`;
+
+  if (blob.includes('candidate list') || blob.includes('svhc')) {
+    return 'svhc_candidate_list';
+  }
+
+  return 'generic';
+}
+
 export const buildSynthesisPrompt = (article: TavilyArticle, regulation: any) => {
   const searchQueries = Array.isArray(regulation.searchQueries) ? regulation.searchQueries : [];
   const triggerWords = Array.isArray(regulation.triggerWords) ? regulation.triggerWords : [];
   const excludedTerms = Array.isArray(regulation.excludedTerms) ? regulation.excludedTerms : [];
   const regulationLabel = regulation.regulationName ?? regulation.regulation_name ?? regulation.id ?? 'unknown regulation';
+  const regulationFocus = inferRegulationFocus(regulation);
+  const focusNote = regulationFocus === 'svhc_candidate_list'
+    ? `\nFocus note: This regulation is the ECHA SVHC Candidate List. Do not recast the article as an Annex XVII restriction update unless the article explicitly and primarily concerns Annex XVII. Use candidate-list terminology in the summary.`
+    : '';
 
   return `
 You are an expert regulatory intelligence processor. Extract structured information from the news article about a regulation.
 
 Regulation being analyzed: "${regulationLabel}"
+${focusNote}
 
 Search intent:
 - Search queries: ${searchQueries.length ? searchQueries.join(', ') : 'N/A'}
@@ -34,6 +54,7 @@ Task:
    - Unknown → "unspecified"
 4. **update_summary**: Write 1-2 concise sentences describing the change. **Start the sentence with "On [Month] [Year], ..."**, using the month/year of the change (from event_month if available, otherwise the article's published date). Use neutral, standardized phrasing so semantically similar updates across articles can be matched. Avoid adjectives, opinions, or citations.
 5. If the article is not clearly about the search intent above, return the closest matching regulatory update only if the article explicitly supports it. Do not substitute adjacent frameworks or a more general regulation just because they are related.
+6. If this is the SVHC Candidate List focus, keep the summary anchored to the candidate list. Do not turn it into an Annex XVII restriction update.
 
 Constraints:
 * Do NOT include evidence, verification, justification, or citations.

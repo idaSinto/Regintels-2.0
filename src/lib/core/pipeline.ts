@@ -9,9 +9,9 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
 // Internal Modules
-import { buildSynthesisPrompt } from "@/lib/core/processors";
+import { buildSynthesisPrompt, inferRegulationFocus } from "@/lib/core/processors";
 import { supabase } from './database';
-import { askLLM } from './openai';
+import { askOpenAI } from './openai';
 import type { ArticleSummary } from '@/lib/core/semantic';
 import { semanticGroupSummaries } from '@/lib/core/semantic';
 import { tavilySearch, TavilyArticle as TavilyArticleCore } from './tavily';
@@ -393,6 +393,7 @@ export async function synthesizeArticles(
   }
 
   const results: CandidateUpdate[] = [];
+  const regulationFocus = inferRegulationFocus(config);
 
   for (const article of articles) {
     if (!isRelevantArticle(article, config)) {
@@ -401,9 +402,15 @@ export async function synthesizeArticles(
     }
 
     const prompt = promptBuilder(article, config);
+    console.log('Synthesizing article:', {
+      regulation: config.id,
+      articleId: article.id ?? null,
+      title: article.title ?? null,
+      url: article.url
+    });
 
     try {
-      const response = await askLLM([
+      const response = await askOpenAI([
         { role: 'system', content: 'You are an expert regulatory analyst.' },
         { role: 'user', content: prompt }
       ]);
@@ -414,6 +421,26 @@ export async function synthesizeArticles(
       } catch {
         console.warn('OpenAI returned non-JSON response, skipping article:', article.url, 'Response:', response);
         continue;
+      }
+
+      if (!parsed.update_summary) {
+        console.warn('Parsed response missing update_summary, skipping article:', article.url, parsed);
+        continue;
+      }
+
+      if (regulationFocus === 'svhc_candidate_list') {
+        const summary = String(parsed.update_summary ?? '').toLowerCase();
+        const mentionsCandidateList = summary.includes('candidate list') || summary.includes('svhc');
+        const mentionsAnnexXvii = summary.includes('annex xvii');
+
+        if (mentionsAnnexXvii && !mentionsCandidateList) {
+          console.warn(
+            'Skipping likely misclassified Annex XVII summary for SVHC candidate-list focus:',
+            article.url,
+            parsed.update_summary
+          );
+          continue;
+        }
       }
 
       parsed.article_id = article.id ?? null;
@@ -528,11 +555,26 @@ export async function runRegulationPipeline({
   const articles: TavilyArticle[] = (rawRows ?? [])
     .slice()
     .sort((a, b) => scoreArticleRelevance(b, config) - scoreArticleRelevance(a, config));
-  if (articles.length === 0) return { ok: true, consensus: false };
+  console.log('Pipeline raw article count:', {
+    regulation: config.id,
+    fetched: rawRows?.length ?? 0,
+    candidateOrder: articles.length
+  });
+  if (articles.length === 0) {
+    console.log('No unprocessed raw articles found for regulation:', config.id);
+    return { ok: true, consensus: false };
+  }
 
   // 3️⃣ Synthesize articles
   const candidates = await synthesizeArticles(config, articles, synthesisPromptBuilder);
-  if (candidates.length === 0) return { ok: true, consensus: false };
+  console.log('Pipeline synthesized candidate count:', {
+    regulation: config.id,
+    count: candidates.length
+  });
+  if (candidates.length === 0) {
+    console.log('No candidates survived synthesis for regulation:', config.id);
+    return { ok: true, consensus: false };
+  }
 
   // 4️⃣ Deduplicate / merge with semantic consensus
   const candidateAnchors: Record<string, CandidateUpdate[]> = {};
@@ -583,7 +625,7 @@ export async function runRegulationPipeline({
 
     // 5️⃣ Insert into verified_updates and latest_verified_updates
 
-for (const candidate of finalCandidates) {
+  for (const candidate of finalCandidates) {
   if (!candidate.update_summary || !candidate.merged_article_ids?.length) continue;
 
   const impact_level = await inferImpactLevel(candidate.update_summary);
@@ -657,7 +699,7 @@ for (const candidate of finalCandidates) {
     .from('raw_articles')
     .update({ is_processed: true })
     .in('id', candidate.merged_article_ids);
-}
+  }
 
 console.log('Pipeline finished for config:', config.id);
 return { ok: true, consensus: true };

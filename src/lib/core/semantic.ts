@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { askLLM } from '@/lib/core/openai';
+import { askOpenAI } from '@/lib/core/openai';
 
 export type ArticleSummary = {
   id: number;
@@ -72,7 +72,7 @@ export async function semanticGroupSummaries(
  * Uses OpenAI to determine if two summaries describe the same regulatory update.
  */
 async function roughlySameUpdate(a: string, b: string): Promise<boolean> {
-  const response = await askLLM([
+  const response = await askOpenAI([
     {
       role: 'system',
       content: 'You decide whether two summaries describe the same regulatory update.'
