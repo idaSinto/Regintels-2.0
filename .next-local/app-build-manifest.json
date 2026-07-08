@@ -31,15 +31,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/latest-verified-updates/route.js"
     ],
-    "/dashboard/product-impact/page": [
+    "/dashboard/regulations/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/product-impact/page.js"
+      "static/chunks/app/dashboard/regulations/page.js"
     ],
-    "/api/sharepoint/product-impact/route": [
+    "/api/regulations/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/sharepoint/product-impact/route.js"
+      "static/chunks/app/api/regulations/route.js"
     ]
   }
 }

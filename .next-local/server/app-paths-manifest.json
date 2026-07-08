@@ -1,5 +1,6 @@
 {
+  "/api/latest-verified-updates/route": "app/api/latest-verified-updates/route.js",
+  "/api/auth/staff-login/route": "app/api/auth/staff-login/route.js",
   "/page": "app/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/product-impact/page": "app/dashboard/product-impact/page.js"
+  "/dashboard/page": "app/dashboard/page.js"
 }
