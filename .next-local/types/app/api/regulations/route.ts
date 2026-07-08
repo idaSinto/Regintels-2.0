@@ -1,8 +1,8 @@
-// File: C:\Users\masid\OneDrive - PRefChem\Documents\Internship\Regintels 2.0\Regintels-2.0\src\app\api\sharepoint\product-impact\route.ts
-import * as entry from '../../../../../../src/app/api/sharepoint/product-impact/route.js'
+// File: C:\Users\masid\OneDrive - PRefChem\Documents\Internship\Regintels 2.0\Regintels-2.0\src\app\api\regulations\route.ts
+import * as entry from '../../../../../src/app/api/regulations/route.js'
 import type { NextRequest } from 'next/server.js'
 
-type TEntry = typeof import('../../../../../../src/app/api/sharepoint/product-impact/route.js')
+type TEntry = typeof import('../../../../../src/app/api/regulations/route.js')
 
 type SegmentParams<T extends Object = any> = T extends Record<string, any>
   ? { [K in keyof T]: T[K] extends string ? string | string[] | undefined : never }

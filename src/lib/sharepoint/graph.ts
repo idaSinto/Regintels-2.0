@@ -13,7 +13,7 @@ type TokenCache = {
 let cachedToken: TokenCache = null;
 
 const SHAREPOINT_AUTH_ENV_VARS = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET'] as const;
-const SHAREPOINT_LIST_ENV_VARS = ['MS_SHAREPOINT_SITE_ID', 'MS_SHAREPOINT_LIST_ID'] as const;
+const SHAREPOINT_LIST_ENV_VARS = ['MS_SHAREPOINT_SITE_ID', 'MS_SHAREPOINT_LIST_PRODUCTS_ID'] as const;
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -56,6 +56,7 @@ function getFieldValue(fields: SharePointListFields, candidates: string[]): unkn
 
   return undefined;
 }
+
 
 function asString(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null;
@@ -147,7 +148,7 @@ export async function queryProductsByCategory(options?: {
   assertSharePointListConfig();
 
   const siteId = requireEnv('MS_SHAREPOINT_SITE_ID');
-  const listId = requireEnv('MS_SHAREPOINT_LIST_ID');
+  const listId = requireEnv('MS_SHAREPOINT_LIST_PRODUCTS_ID');
   const accessToken = await getSharePointToken();
   const limit = Math.min(Math.max(options?.limit ?? 20, 1), 200);
 
