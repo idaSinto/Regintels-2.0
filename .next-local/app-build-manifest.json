@@ -40,6 +40,31 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/regulations/route.js"
+    ],
+    "/dashboard/impact-settings/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/impact-settings/page.js"
+    ],
+    "/api/impact-keywords/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/impact-keywords/route.js"
+    ],
+    "/dashboard/staff-users/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/staff-users/page.js"
+    ],
+    "/dashboard/product-impact/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/product-impact/page.js"
+    ],
+    "/api/sharepoint/product-impact/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/sharepoint/product-impact/route.js"
     ]
   }
 }
