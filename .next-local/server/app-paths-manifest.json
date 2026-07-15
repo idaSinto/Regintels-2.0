@@ -1,11 +1,6 @@
 {
+  "/api/auth/staff-login/route": "app/api/auth/staff-login/route.js",
   "/api/latest-verified-updates/route": "app/api/latest-verified-updates/route.js",
-  "/api/sharepoint/product-impact/route": "app/api/sharepoint/product-impact/route.js",
-  "/api/regulations/route": "app/api/regulations/route.js",
   "/page": "app/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/regulations/page": "app/dashboard/regulations/page.js",
-  "/dashboard/impact-settings/page": "app/dashboard/impact-settings/page.js",
-  "/dashboard/staff-users/page": "app/dashboard/staff-users/page.js",
-  "/dashboard/product-impact/page": "app/dashboard/product-impact/page.js"
+  "/dashboard/page": "app/dashboard/page.js"
 }
