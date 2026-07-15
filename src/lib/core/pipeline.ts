@@ -10,6 +10,7 @@ dayjs.extend(isSameOrBefore);
 
 // Internal Modules
 import { buildSynthesisPrompt, inferRegulationFocus } from "@/lib/core/processors";
+import { isMalaysiaOshaConfig, isRelevantArticle, scoreArticleRelevance } from '@/lib/core/articleRelevance';
 import { supabase } from './database';
 import { askOpenAI } from './openai';
 import type { ArticleSummary } from '@/lib/core/semantic';
@@ -51,147 +52,18 @@ type ImpactKeyword = {
   level: 'high' | 'medium' | 'low';
 };
 
-const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'are', 'was', 'were', 'has', 'have',
-  'been', 'into', 'over', 'under', 'about', 'after', 'before', 'between', 'within', 'without',
-  'list', 'update', 'updates', 'regulation', 'regulatory', 'guidance', 'news', 'article', 'report',
-  'rule', 'rules', 'new', 'latest', 'echa', 'european', 'commission'
-]);
-
-function normalizeTerms(terms: string[] | undefined): string[] {
-  return Array.from(
-    new Set(
-      (terms ?? [])
-        .map(term => term.trim().toLowerCase())
-        .filter(Boolean)
-        .filter(term => term.length >= 3)
-    )
-  );
+function normalizeSourceDomains(sources: string[] | undefined): string[] {
+  return Array.from(new Set((sources ?? []).map(s => s.trim()).filter(Boolean)));
 }
 
-function deriveTriggerWordsFromQueries(searchQueries: string[]): string[] {
-  const derived = new Set<string>();
+function buildPrimarySources(config: RegConfig): string[] {
+  const sources = normalizeSourceDomains(config.primarySources);
 
-  for (const query of searchQueries) {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) continue;
-
-    derived.add(normalized);
-
-    const tokens = normalized
-      .replace(/[^a-z0-9\s-]/g, ' ')
-      .split(/\s+/)
-      .map(token => token.trim())
-      .filter(token => token.length >= 4 && !STOP_WORDS.has(token));
-
-    for (const token of tokens) {
-      derived.add(token);
-    }
+  if (isMalaysiaOshaConfig(config) && !sources.some(source => source.toLowerCase().includes('dosh.gov.my'))) {
+    return ['dosh.gov.my', ...sources];
   }
 
-  return Array.from(derived);
-}
-
-function getArticleSearchBlob(article: TavilyArticle): string {
-  return [
-    article.title,
-    article.snippet,
-    article.content,
-    article.source,
-    article.domain,
-    article.url
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-}
-
-function buildRelevantTerms(config: RegConfig) {
-  const searchQueries = normalizeTerms(config.searchQueries);
-  const triggerWords = normalizeTerms(config.triggerWords);
-  const excludedTerms = normalizeTerms(config.excludedTerms);
-  const effectiveTriggers = triggerWords.length > 0 ? triggerWords : deriveTriggerWordsFromQueries(searchQueries);
-
-  return {
-    searchQueries,
-    triggerWords: effectiveTriggers,
-    excludedTerms
-  };
-}
-
-function isRelevantArticle(article: TavilyArticle, config: RegConfig): boolean {
-  const blob = getArticleSearchBlob(article);
-  const { searchQueries, triggerWords, excludedTerms } = buildRelevantTerms(config);
-  const queryText = searchQueries.join(' ');
-  const wantsCandidateList = queryText.includes('candidate list') || triggerWords.some(term => term.includes('candidate list') || term.includes('svhc'));
-
-  if (excludedTerms.some(term => blob.includes(term))) {
-    return false;
-  }
-
-  if (wantsCandidateList) {
-    return blob.includes('candidate list') || blob.includes('svhc');
-  }
-
-  const positiveTerms = [...triggerWords, ...searchQueries];
-  if (positiveTerms.length === 0) {
-    return true;
-  }
-
-  const exactMatches = positiveTerms.filter(term => blob.includes(term));
-  if (exactMatches.length > 0) {
-    return true;
-  }
-
-  const tokenHits = new Set(
-    positiveTerms
-      .flatMap(term => term.split(/\s+/))
-      .map(token => token.trim())
-      .filter(token => token.length >= 4 && !STOP_WORDS.has(token))
-      .filter(token => blob.includes(token))
-  );
-
-  return tokenHits.size >= 2;
-}
-
-function scoreArticleRelevance(article: TavilyArticle, config: RegConfig): number {
-  const blob = getArticleSearchBlob(article);
-  const { searchQueries, triggerWords, excludedTerms } = buildRelevantTerms(config);
-  const queryText = searchQueries.join(' ');
-  const wantsCandidateList = queryText.includes('candidate list') || triggerWords.some(term => term.includes('candidate list') || term.includes('svhc'));
-  let score = 0;
-
-  if (excludedTerms.some(term => blob.includes(term))) {
-    return -1000;
-  }
-
-  if (wantsCandidateList) {
-    if (blob.includes('candidate list')) score += 50;
-    if (blob.includes('svhc')) score += 20;
-    if (blob.includes('annex xvii')) score -= 10;
-    return score;
-  }
-
-  for (const term of searchQueries) {
-    if (blob.includes(term)) score += 6;
-  }
-
-  for (const term of triggerWords) {
-    if (blob.includes(term)) score += 4;
-  }
-
-  if (searchQueries.some(term => term.includes('candidate list')) && blob.includes('candidate list')) {
-    score += 12;
-  }
-
-  if (searchQueries.some(term => term.includes('annex xvii')) && blob.includes('annex xvii')) {
-    score += 12;
-  }
-
-  if (blob.includes('svhc')) score += 2;
-  if (blob.includes('echa')) score += 1;
-
-  return score;
+  return sources;
 }
 
 // ---------------------------------------------------------
@@ -205,8 +77,8 @@ export async function scanAndStoreArticles(
 
   const aggregatedResults: TavilyArticle[] = [];
   const oneYearAgo = dayjs().subtract(1, 'year').startOf('day');
-  const primarySources = Array.from(new Set((config.primarySources ?? []).map(s => s.trim()).filter(Boolean)));
-  const secondarySources = Array.from(new Set((config.secondarySources ?? []).map(s => s.trim()).filter(Boolean)));
+  const primarySources = buildPrimarySources(config);
+  const secondarySources = normalizeSourceDomains(config.secondarySources);
   const knownSources = Array.from(new Set([...primarySources, ...secondarySources]));
   const mainScopes = [
     { label: 'primary', includeDomains: primarySources, excludeDomains: [] as string[] },

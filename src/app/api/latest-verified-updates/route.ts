@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/core/database';
+import {
+  isDoshMalaysiaArticle,
+  isExcludedArticle,
+  isGenericNewsIndexArticle,
+  isMalaysiaOshaRegulationName
+} from '@/lib/core/articleRelevance';
 
 // ==========================================
 // 1. TYPES & INTERFACES
@@ -76,6 +82,8 @@ export async function GET() {
     const related_articles: Article[] = (row.related_article_ids ?? [])
       .map((id) => articlesMap.get(id))
       .filter((a): a is Article => Boolean(a)) // Remove any undefined lookups
+      .filter((article) => !isExcludedArticle(article))
+      .filter((article) => !isMalaysiaOshaRegulationName(row.regulation_name) || isDoshMalaysiaArticle(article))
       .sort((a, b) => a.id - b.id);
 
     return {
@@ -90,6 +98,21 @@ export async function GET() {
       deduced_published_date: row.deduced_published_date,
       created_at: row.created_at,
     };
+  }).filter((update) => {
+    if (isMalaysiaOshaRegulationName(update.regulation_name) && !update.related_articles.some(isDoshMalaysiaArticle)) {
+      return false;
+    }
+
+    const relatedText = update.related_articles
+      .map((article) => `${article.title ?? ''} ${article.url ?? ''} ${article.source_domain ?? ''}`)
+      .join(' ');
+
+    return !isGenericNewsIndexArticle({
+      title: update.deduced_title,
+      snippet: `${update.summary_text ?? ''} ${relatedText}`,
+      source: update.related_articles[0]?.source_domain ?? null,
+      url: update.primary_source_url,
+    });
   });
 
   return NextResponse.json(updates);
