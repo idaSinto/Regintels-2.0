@@ -22,6 +22,15 @@ export function matchProductsToRegulations(
       matches.push({
         productItemId: product.itemId,
         productName: product.productName,
+        productCas: product.productCas,
+        productFamily: product.productFamily,
+        productGrade: product.productGrade,
+        plant: product.plant,
+        licensorNomenclature: product.licensorNomenclature,
+        meltIndex: product.meltIndex,
+        density: product.density,
+        additivePackage: product.additivePackage,
+        additives: product.additives,
         regulationId: regulation.id,
         regulationName: regulation.name,
         matchScore,
@@ -44,9 +53,11 @@ export function groupMatchesByProduct(matches: ProductRegulationMatch[]): Produc
       grouped.set(match.productItemId, {
         itemId: match.productItemId,
         productName: match.productName,
-        productFamily: [],
-        productGrade: null,
-        plant: null,
+        productCas: match.productCas,
+        productFamily: match.productFamily,
+        productGrade: match.productGrade,
+        plant: match.plant,
+        licensorNomenclature: match.licensorNomenclature,
         matchCount: 1,
         topMatches: [match],
         sharePointUrl: match.sharePointUrl,
@@ -59,6 +70,49 @@ export function groupMatchesByProduct(matches: ProductRegulationMatch[]): Produc
   }
 
   return Array.from(grouped.values()).sort((a, b) => b.matchCount - a.matchCount);
+}
+
+export function groupProductsWithMatches(
+  products: ProductRecord[],
+  matches: ProductRegulationMatch[],
+): ProductImpactProductGroup[] {
+  const matchesByProduct = new Map<string, ProductRegulationMatch[]>();
+
+  for (const match of matches) {
+    const current = matchesByProduct.get(match.productItemId) ?? [];
+    current.push(match);
+    matchesByProduct.set(match.productItemId, current);
+  }
+
+  return products.map((product) => {
+    const productMatches = (matchesByProduct.get(product.itemId) ?? [])
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 3);
+
+    return {
+      itemId: product.itemId,
+      productName: product.productName,
+      productCas: product.productCas,
+      productFamily: product.productFamily,
+      productGrade: product.productGrade,
+      plant: product.plant,
+      licensorNomenclature: product.licensorNomenclature,
+      meltIndex: product.meltIndex,
+      density: product.density,
+      additivePackage: product.additivePackage,
+      prefchemPrimeRev3: product.prefchemPrimeRev3,
+      prefchemPrimeRev33: product.prefchemPrimeRev33,
+      prefchemPrimeRev34: product.prefchemPrimeRev34,
+      ethyleneContent: product.ethyleneContent,
+      propyleneContent: product.propyleneContent,
+      buteneContent: product.buteneContent,
+      hexeneContent: product.hexeneContent,
+      additives: product.additives,
+      matchCount: matchesByProduct.get(product.itemId)?.length ?? 0,
+      topMatches: productMatches,
+      sharePointUrl: product.webUrl,
+    };
+  });
 }
 
 export function groupMatchesByRegulation(matches: ProductRegulationMatch[]): ProductImpactRegulationGroup[] {
@@ -86,4 +140,3 @@ export function groupMatchesByRegulation(matches: ProductRegulationMatch[]): Pro
 export function toRegulationImpactClass(score: number): string {
   return buildMatchLabel(score);
 }
-

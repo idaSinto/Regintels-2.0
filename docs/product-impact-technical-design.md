@@ -128,7 +128,7 @@ The following variables are required in `.env.local`:
 - `MS_CLIENT_ID`
 - `MS_CLIENT_SECRET`
 - `MS_SHAREPOINT_SITE_ID`
-- `MS_SHAREPOINT_LIST_ID`
+- `MS_SHAREPOINT_LIST_PRODUCTS_ID`
 
 The current implementation fails fast and surfaces a visible UI error if any of these are missing.
 

@@ -58,7 +58,7 @@ Required environment variables in `.env.local`:
 - `MS_CLIENT_ID`
 - `MS_CLIENT_SECRET`
 - `MS_SHAREPOINT_SITE_ID`
-- `MS_SHAREPOINT_LIST_ID`
+- `MS_SHAREPOINT_LIST_PRODUCTS_ID`
 
 Other dependencies:
 

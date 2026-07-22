@@ -6,6 +6,11 @@ import { AlertCircle, ExternalLink, Eye, Lock, RefreshCw, Search } from 'lucide-
 type ProductRegulationMatch = {
   productItemId: string;
   productName: string;
+  productCas: string | null;
+  productFamily: string[];
+  productGrade: string | null;
+  plant: string | null;
+  licensorNomenclature: string | null;
   regulationId: number;
   regulationName: string;
   matchScore: number;
@@ -17,9 +22,11 @@ type ProductRegulationMatch = {
 type ProductGroup = {
   itemId: string;
   productName: string;
+  productCas: string | null;
   productFamily: string[];
   productGrade: string | null;
   plant: string | null;
+  licensorNomenclature: string | null;
   matchCount: number;
   topMatches: ProductRegulationMatch[];
   sharePointUrl: string | null;
@@ -130,7 +137,7 @@ export default function ProductImpactPage() {
               <input
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="LLDPE, HDPE, PP..."
+                placeholder="CAS Number/ licensor..."
                 className="w-full bg-transparent text-[var(--foreground)] focus:outline-none"
               />
             </div>
@@ -205,14 +212,18 @@ export default function ProductImpactPage() {
                   {view === 'by_regulation' ? 'Regulations with product exposure' : 'Products with regulation exposure'}
                 </h2>
                 <p className="text-sm text-[var(--foreground)]/60">
-                  {data?.ok ? `${data.count} matches returned` : 'No data yet'}
+                  {data?.ok
+                    ? `${data.count} ${view === 'by_product' ? 'products returned' : 'matches returned'}`
+                    : 'No data yet'}
                 </p>
               </div>
 
               <div className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
                 {!error && results.length === 0 && (
                   <div className="p-5 text-sm text-[var(--foreground)]/60">
-                    No live product matches yet. Try another product family or click Live Fetch.
+                    {view === 'by_product'
+                      ? 'No SharePoint products found for this search. Try a Product CAS, licensor, category, or click Live Fetch.'
+                      : 'No live regulation matches yet. Try another product family or click Live Fetch.'}
                   </div>
                 )}
                 {view === 'by_regulation'
@@ -237,7 +248,7 @@ export default function ProductImpactPage() {
                               key={`${group.regulationId}-${match.productItemId}`}
                               className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${scoreClass(match.matchScore)}`}
                             >
-                              {match.productName} · {match.matchScore}%
+                              {match.productName} - {match.matchScore}%
                             </span>
                           ))}
                         </div>
@@ -254,7 +265,11 @@ export default function ProductImpactPage() {
                           <div>
                             <h3 className="font-semibold text-[var(--foreground)]">{group.productName}</h3>
                             <p className="text-sm text-[var(--foreground)]/60">
-                              {group.productGrade || 'No grade'}{group.plant ? ` · ${group.plant}` : ''}
+                              {group.productGrade || 'No tagging'}{group.plant ? ` - ${group.plant}` : ''}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--foreground)]/50">
+                              CAS: {group.productCas || 'N/A'}
+                              {group.licensorNomenclature ? ` - Licensor: ${group.licensorNomenclature}` : ''}
                             </p>
                           </div>
                           <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
@@ -267,7 +282,7 @@ export default function ProductImpactPage() {
                               key={`${group.itemId}-${match.regulationId}`}
                               className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${scoreClass(match.matchScore)}`}
                             >
-                              {match.regulationName} · {match.matchScore}%
+                              {match.regulationName} - {match.matchScore}%
                             </span>
                           ))}
                         </div>
@@ -289,6 +304,14 @@ export default function ProductImpactPage() {
                     <p className="text-sm text-[var(--foreground)]/60">
                       SharePoint item {selectedProduct.itemId}
                     </p>
+                    <p className="mt-1 text-sm text-[var(--foreground)]/60">
+                      CAS: {selectedProduct.productCas || 'N/A'}
+                    </p>
+                    {selectedProduct.licensorNomenclature && (
+                      <p className="text-sm text-[var(--foreground)]/60">
+                        Licensor: {selectedProduct.licensorNomenclature}
+                      </p>
+                    )}
                   </div>
 
                   <div className="rounded-xl bg-white/50 p-4 dark:bg-gray-900/40">
@@ -309,6 +332,11 @@ export default function ProductImpactPage() {
                   </div>
 
                   <div className="space-y-3">
+                    {selectedProduct.topMatches.length === 0 && (
+                      <div className="rounded-xl border border-gray-200/50 p-4 text-sm text-[var(--foreground)]/60 dark:border-gray-700/50">
+                        This SharePoint product was found, but no active regulation matched it above the current score threshold.
+                      </div>
+                    )}
                     {selectedProduct.topMatches.map((match) => (
                       <div key={`${selectedProduct.itemId}-${match.regulationId}`} className="rounded-xl border border-gray-200/50 p-4 dark:border-gray-700/50">
                         <div className="flex items-center justify-between gap-4">

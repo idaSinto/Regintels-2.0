@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/core/database';
 import {
   normalizeSharePointItemToProduct,
+  queryAdditivesByProductCas,
   queryProductsByCategory,
 } from '@/lib/sharepoint/graph';
 import {
-  groupMatchesByProduct,
   groupMatchesByRegulation,
+  groupProductsWithMatches,
   matchProductsToRegulations,
 } from '@/lib/sharepoint/matching';
 import type { ProductViewMode, RegulationLite } from '@/lib/sharepoint/types';
@@ -52,16 +53,23 @@ export async function GET(request: Request) {
 
     const items = await queryProductsByCategory({ category, limit, itemId });
     const products = items.map(normalizeSharePointItemToProduct);
+    const additivesByCas = await queryAdditivesByProductCas(
+      Array.from(new Set(products.map((product) => product.productCas).filter((cas): cas is string => Boolean(cas)))),
+    );
+    const enrichedProducts = products.map((product) => ({
+      ...product,
+      additives: product.productCas ? additivesByCas.get(product.productCas) ?? [] : [],
+    }));
     const regulations = await loadRegulations();
-    const matches = matchProductsToRegulations(products, regulations);
+    const matches = matchProductsToRegulations(enrichedProducts, regulations);
 
     const payload =
       view === 'by_product'
         ? {
             view,
             category: category ?? null,
-            count: matches.length,
-            results: groupMatchesByProduct(matches),
+            count: enrichedProducts.length,
+            results: groupProductsWithMatches(enrichedProducts, matches),
           }
         : {
             view,

@@ -11,7 +11,7 @@ MS_TENANT_ID=
 MS_CLIENT_ID=
 MS_CLIENT_SECRET=
 MS_SHAREPOINT_SITE_ID=
-MS_SHAREPOINT_LIST_ID=
+MS_SHAREPOINT_LIST_PRODUCTS_ID=
 ```
 
 ### Where to get each value
@@ -36,7 +36,7 @@ MS_SHAREPOINT_LIST_ID=
    - Get the site by path with Microsoft Graph, or use Graph Explorer / a direct Graph call.
    - The returned JSON contains the SharePoint site `id` in the form `hostname,guid,guid` [[3]](https://learn.microsoft.com/en-us/graph/api/site-getbypath?view=graph-rest-1.0).
 
-5. `MS_SHAREPOINT_LIST_ID`
+5. `MS_SHAREPOINT_LIST_PRODUCTS_ID`
    - Call Microsoft Graph on the site to list the SharePoint lists.
    - Find the list your product data lives in and copy its `id` [[4]](https://learn.microsoft.com/en-us/graph/api/list-list?view=graph-rest-1.0) [[5]](https://learn.microsoft.com/en-us/graph/api/list-get?view=graph-rest-1.0).
 
@@ -46,7 +46,7 @@ MS_SHAREPOINT_LIST_ID=
 2. Grant Microsoft Graph application permissions for SharePoint access and admin consent.
 3. Copy `MS_TENANT_ID`, `MS_CLIENT_ID`, and `MS_CLIENT_SECRET`.
 4. Use Graph to resolve `MS_SHAREPOINT_SITE_ID`.
-5. Use Graph to resolve `MS_SHAREPOINT_LIST_ID`.
+5. Use Graph to resolve `MS_SHAREPOINT_LIST_PRODUCTS_ID`.
 6. Put the values in `.env.local`.
 7. Restart the dev server.
 

@@ -15,13 +15,35 @@ export type ProductRecord = {
   itemId: string;
   webUrl: string | null;
   productName: string;
+  productCas: string | null;
   productFamily: string[];
   productGrade: string | null;
   plant: string | null;
+  meltIndex: string | null;
+  density: string | null;
+  additivePackage: string | null;
+  prefchemPrimeRev3: string | null;
+  prefchemPrimeRev33: string | null;
+  prefchemPrimeRev34: string | null;
+  ethyleneContent: string | null;
+  propyleneContent: string | null;
+  buteneContent: string | null;
+  hexeneContent: string | null;
   application: string | null;
   sourceSheet: string | null;
+  licensorNomenclature: string | null;
   confidentiality: string | null;
+  additives: ProductAdditiveDetail[];
   searchBlob: string;
+};
+
+export type ProductAdditiveDetail = {
+  itemId: string;
+  licensor: string | null;
+  productCas: string | null;
+  type: string;
+  additiveCas: string | null;
+  levelPpm: string | null;
 };
 
 export type RegulationLite = {
@@ -33,6 +55,15 @@ export type RegulationLite = {
 export type ProductRegulationMatch = {
   productItemId: string;
   productName: string;
+  productCas: string | null;
+  productFamily: string[];
+  productGrade: string | null;
+  plant: string | null;
+  licensorNomenclature: string | null;
+  meltIndex: string | null;
+  density: string | null;
+  additivePackage: string | null;
+  additives: ProductAdditiveDetail[];
   regulationId: number;
   regulationName: string;
   matchScore: number;
@@ -44,9 +75,22 @@ export type ProductRegulationMatch = {
 export type ProductImpactProductGroup = {
   itemId: string;
   productName: string;
+  productCas: string | null;
   productFamily: string[];
   productGrade: string | null;
   plant: string | null;
+  licensorNomenclature: string | null;
+  meltIndex: string | null;
+  density: string | null;
+  additivePackage: string | null;
+  prefchemPrimeRev3: string | null;
+  prefchemPrimeRev33: string | null;
+  prefchemPrimeRev34: string | null;
+  ethyleneContent: string | null;
+  propyleneContent: string | null;
+  buteneContent: string | null;
+  hexeneContent: string | null;
+  additives: ProductAdditiveDetail[];
   matchCount: number;
   topMatches: ProductRegulationMatch[];
   sharePointUrl: string | null;
@@ -58,4 +102,3 @@ export type ProductImpactRegulationGroup = {
   matchCount: number;
   topMatches: ProductRegulationMatch[];
 };
-
